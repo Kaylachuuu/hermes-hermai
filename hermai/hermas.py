@@ -82,10 +82,14 @@ class Hermas:
         tmp.replace(self.path)
 
 
-def household_note(room: str) -> str:
-    """What Athena is told on every turn from a herma."""
+def household_note(room: str, now: float | None = None) -> str:
+    """What Athena is told on every turn from a herma, with the time on Hermes' clock so she never
+    has to guess it."""
     where = f"the {room} herma" if room else "a herma"
-    return (f"[Hermai] This message came through {where}, a shared tablet in the house. Anyone in the "
+    stamp = time.localtime(time.time() if now is None else now)
+    clock = time.strftime("%A %d %B %Y, %I:%M %p", stamp).replace(" 0", " ")
+    zone = time.strftime("%Z", stamp)
+    return (f"[Hermai] It is {clock}{' ' + zone if zone else ''}. This message came through {where}, a shared tablet in the house. Anyone in the "
             "household, or a guest, may be speaking, so don't assume it's Kayla; ask who's asking before "
             "anything personal. Your reply is spoken aloud in the room: keep it short and plain, with no "
             "markdown or lists. When asked to control something without naming a room, it means this room.")

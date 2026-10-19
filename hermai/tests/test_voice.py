@@ -149,3 +149,15 @@ def test_hello_keeps_the_room_and_listening(tmp_path):
 def test_the_household_note_names_the_room():
     note = hermas.household_note("Kitchen")
     assert "Kitchen herma" in note and "don't assume it's Kayla" in note
+
+
+def test_the_household_note_gives_the_time(monkeypatch):
+    monkeypatch.setenv("TZ", "America/Denver")
+    import time
+    time.tzset()
+    try:
+        note = hermas.household_note("Kitchen", now=1792442460)  # 2026-10-19 20:41 UTC
+        assert "It is Monday 19 October 2026, 2:41 PM MDT." in note
+    finally:
+        monkeypatch.delenv("TZ")
+        time.tzset()
