@@ -7,6 +7,9 @@ on:
     paths: ["android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,3 +29,19 @@ jobs:
         with:
           name: hermai-herma-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      # The newest build also goes to the "herma-latest" release, so a tablet's browser can fetch the APK
+      # directly: https://github.com/Kaylachuuu/hermes-hermai/releases/download/herma-latest/hermai-herma.apk
+      - name: Publish to the herma-latest release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: .
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk hermai-herma.apk
+          notes="Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}. Open hermai-herma.apk on the tablet to install or update."
+          if gh release view herma-latest >/dev/null 2>&1; then
+            gh release upload herma-latest hermai-herma.apk --clobber
+            gh release edit herma-latest --notes "$notes" --target "$GITHUB_SHA"
+          else
+            gh release create herma-latest hermai-herma.apk --prerelease --title "Hermai app (latest build)" --notes "$notes" --target "$GITHUB_SHA"
+          fi
