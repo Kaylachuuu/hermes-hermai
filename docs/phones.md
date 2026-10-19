@@ -25,3 +25,21 @@ Only Kayla's phones, for now. Anyone else's phone can pair, but Athena refuses t
 - The plugin registers a dashboard sign-in provider, `hermai-devices`, that recognises only Hermai codes (`hp1_…`) and tokens (`hm1_…`). It has no login page and makes no dashboard sessions.
 - Hermes' token sign-in seam opens exactly these paths to it: `/api/plugins/hermai/pair/claim` (a code, once), and `/p/hello`, `/p/voice`, `/p/ask`, `/p/audio` (a phone token). Everything else under `/api/plugins/hermai/` still needs the dashboard sign-in.
 - Each phone has its own chat, "Hermai · Kayla's iPhone", and Athena is told whose phone it is on every turn.
+
+## The iPhone app on TestFlight
+
+GitHub builds, signs and uploads the iPhone app to TestFlight on each push to main that changes `ios/`
+(or from the iPhone app workflow's Run button). It needs these repo secrets, under Settings, Secrets and
+variables, Actions:
+
+- `ASC_KEY_ID` and `ASC_ISSUER_ID`: an App Store Connect team key with App Manager access (Users and Access,
+  Integrations, Team Keys).
+- `ASC_KEY_P8`: the whole text of that key's .p8 file.
+- `APPLE_TEAM_ID`: the team id from developer.apple.com, Membership details.
+
+The App IDs `io.github.kaylachuuu.hermai` and `io.github.kaylachuuu.hermai.tunnel` (with Network Extensions)
+and an App Store Connect app for the first one come first. Without the secrets the upload step is skipped.
+
+The app says it uses no non-exempt encryption (`ITSAppUsesNonExemptEncryption`), so TestFlight asks no export
+questions. WireGuard is standard, publicly available encryption; if the app ever goes on the App Store, check
+that answer with Apple's export compliance guidance first.
