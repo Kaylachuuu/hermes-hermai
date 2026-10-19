@@ -1,0 +1,7 @@
+name: hermai
+version: 0.2.1
+description: "Hermai, Athena as the voice of the house: the backend for the room tablets (hermas), and a guard on locks, the alarm and the garage."
+author: "Kaylachuuu"
+provides_hooks:
+  - pre_tool_call
+  - pre_llm_call

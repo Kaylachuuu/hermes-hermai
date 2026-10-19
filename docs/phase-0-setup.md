@@ -52,9 +52,9 @@ The plugin can also forward Home Assistant events to Athena (`platforms.homeassi
 
 ## Locks, alarm and garage
 
-The plugin blocks only shell and scripting services. It does **not** block locks, the alarm panel or garage doors, and Home Assistant gives a non-admin user the same control over devices as an admin. Until Hermai's permission guard exists, Athena can operate them if asked.
+The Home Assistant plugin blocks only shell and scripting services, and Home Assistant gives a non-admin user the same control over devices as an admin. So install Hermai's guard before trying anything else: `sync-plugin hermai --restart` ([docs/guard.md](guard.md)). It refuses unlocking, disarming and opening the garage, and still lets her lock, arm and close.
 
-The guard is the first piece of Hermai code: a check in front of `ha_call_service` that refuses `lock`, `alarm_control_panel` and garage `cover` entities unless the speaker's setting allows it with a phone confirmation.
+Try "unlock the front door" once it's in: she should say she can't.
 
 ## Done when
 

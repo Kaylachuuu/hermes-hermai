@@ -15,7 +15,7 @@ Holonomic (hermes-holonomic-memory) keeps a separate memory store per person fro
 
 ## Dependency on the Hermai side (not yours, for awareness)
 
-Petasos sends each turn over the dashboard's `/api/ws`, and Hermes refuses a client-stamped author there (`tui_gateway/methods_prompt.py:762`, error 4124: "turn author is stamped by the gateway, never by a client"). Hermai will need a server-side way for the Petasos plugin to stamp the speaker on a turn. Hermai owns that; holonomic just needs to read the author core passes it.
+Petasos sends each turn over the dashboard's `/api/ws`, and a Hermai backend built the same way would too, and Hermes refuses a client-stamped author there (`tui_gateway/methods_prompt.py:762`, error 4124: "turn author is stamped by the gateway, never by a client"). Hermai's backend will need a server-side way to stamp the speaker on a turn. Hermai owns that; holonomic just needs to read the author core passes it.
 
 ## Timing
 

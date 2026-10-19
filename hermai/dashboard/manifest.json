@@ -1,0 +1,10 @@
+{
+  "name": "hermai",
+  "label": "Hermai",
+  "description": "The routes Hermai's tablets use: hello, voice turns with Athena, and their spoken replies.",
+  "icon": "Settings",
+  "version": "0.2.0",
+  "tab": { "path": "/hermai", "position": "end", "hidden": true },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}
