@@ -30,6 +30,7 @@ jobs:
           -destination 'generic/platform=iOS' -configuration Debug
           -derivedDataPath build/DerivedData
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-          | grep -vE '^    export ' | tail -150
-          ; exit ${PIPESTATUS[0]}
+          > build.log 2>&1
+          || { awk '/^ExternalBuildToolExecution/,/^$/' build.log | grep -vE '^    export ' | tail -120;
+               grep -E 'error|fatal|go: ' build.log | grep -v ' -x c ' | head -60; exit 1; }
         shell: bash
