@@ -82,14 +82,26 @@ class Hermas:
         tmp.replace(self.path)
 
 
-def household_note(room: str, now: float | None = None) -> str:
-    """What Athena is told on every turn from a herma, with the time on Hermes' clock so she never
-    has to guess it."""
-    where = f"the {room} herma" if room else "a herma"
+def _it_is(now: float | None) -> str:
+    """The time on Hermes' clock, so Athena never has to guess it."""
     stamp = time.localtime(time.time() if now is None else now)
     clock = time.strftime("%A %d %B %Y, %I:%M %p", stamp).replace(" 0", " ")
     zone = time.strftime("%Z", stamp)
-    return (f"[Hermai] It is {clock}{' ' + zone if zone else ''}. This message came through {where}, a shared tablet in the house. Anyone in the "
+    return f"It is {clock}{' ' + zone if zone else ''}."
+
+
+def household_note(room: str, now: float | None = None) -> str:
+    """What Athena is told on every turn from a herma."""
+    where = f"the {room} herma" if room else "a herma"
+    return (f"[Hermai] {_it_is(now)} This message came through {where}, a shared tablet in the house. Anyone in the "
             "household, or a guest, may be speaking, so don't assume it's Kayla; ask who's asking before "
             "anything personal. Your reply is spoken aloud in the room: keep it short and plain, with no "
             "markdown or lists. When asked to control something without naming a room, it means this room.")
+
+
+def personal_note(person: str, device: str, now: float | None = None) -> str:
+    """What Athena is told on every turn from a paired phone."""
+    return (f"[Hermai] {_it_is(now)} This message came from {person}'s own phone "
+            f"({device}), signed in to Hermai as {person}, so it's {person} speaking. They may be away from "
+            "the house. Your reply is spoken aloud: keep it short and plain, with no markdown or lists. "
+            "If they ask about a room without naming it, ask which one.")

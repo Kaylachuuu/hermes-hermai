@@ -28,3 +28,12 @@ Needed before Hermai phase 3 (voice recognition). Phases 0 to 2 run single-speak
 - The People page writes `holonomic.json`: `owner` (`"kayla"`) and `people` (`{"elliot": {"remembered": true}, ...}`). `remembered: false` means nothing written or recalled.
 - Holonomic's own plan is in the project files at `hermai/holonomic-multi-user-plan.md`.
 - Update 2026-10-19 (holonomic 0.34.0 built, awaiting Kayla's merge): Hermai must stamp EVERY herma turn, `person:<id>` or `person:guest`. An unstamped first turn of a new room session would open Kayla's store. Until voice recognition exists (phases 1-2), herma turns are stamped `person:guest`, so nothing said at a herma is remembered yet. Libraries are per person; subagents get no memory once people are set.
+
+## Where stamping stands (2026-10-19)
+
+Not built yet. Herma and phone turns go over `/api/ws` like Petasos's and carry no author, so once holonomic 0.34.0 is merged they open Kayla's store. That's right while Kayla is the only one using them, and wrong for anyone else. Until stamping works:
+
+- Paired phones belonging to anyone but Kayla can pair but are refused when they try to talk (`people.py`, `/p/` routes).
+- The tablets should only be used by Kayla.
+
+The likely path: Hermes' API server takes an `author` object on `POST /api/sessions/{id}/chat` (`gateway/platforms/api_server.py`, `_request_turn_author`), which labels the turn for memory. Hermai would send person turns there from the server side, with the author from the phone's token or the voiceprint match. That needs the API server running with its key, so it's checked before phase 2b.

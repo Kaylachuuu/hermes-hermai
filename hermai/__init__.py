@@ -5,7 +5,9 @@
 - ``dashboard/plugin_api.py`` is the backend the hermas talk to (``/api/plugins/hermai/``), with
   ``voice.py`` running their turns with Athena and ``hermas.py`` keeping each tablet's room.
 - The ``pre_llm_call`` hook tells Athena, on each turn from a herma, which room she's speaking in
-  and that the tablet is shared.
+  and that the tablet is shared; on a turn from a paired phone, whose phone it is.
+- ``people.py`` is Hermai's own sign-in for people's phones: ``/hermai pair <person>`` makes a
+  one-time code, and the phone trades it for a token that opens Hermai's person routes only.
 """
 from __future__ import annotations
 
@@ -64,18 +66,64 @@ def _chats():
     return _CHATS
 
 
+def _people():
+    from hermes_constants import get_hermes_home
+    return _load("hermes_hermai_people", "people.py").shared(Path(get_hermes_home()) / "hermai" / "people.json")
+
+
 def _pre_llm_call(session_id: str = "", parent_session_id: str = "", **_kwargs):
-    """On a turn in a herma's chat, the room and shared-tablet note; on any other chat, nothing."""
+    """On a turn in a herma's or a paired phone's chat, the note about where it came from; on any
+    other chat, nothing."""
     try:
-        room = _chats().room_of_session(session_id, parent_session_id)
+        entry = _chats().entry_of_session(session_id, parent_session_id)
     except Exception:
         return None
-    if room is None:
+    if entry is None:
         return None
-    return {"context": _load("hermes_hermai_hermas", "hermas.py").household_note(room)}
+    notes = _load("hermes_hermai_hermas", "hermas.py")
+    if entry.get("person"):
+        name = _load("hermes_hermai_people", "people.py").display_name(entry["person"])
+        return {"context": notes.personal_note(name, entry.get("device") or "phone")}
+    return {"context": notes.household_note(str(entry.get("room") or ""))}
 
 
-def _slash(_args: str = "") -> str:
+def _slash(args: str = "") -> str:
+    words = (args or "").split()
+    if words and words[0] == "pair":
+        return _pair(words[1:])
+    if words and words[0] == "phones":
+        return _phones(words[1:])
+    return _guard_status()
+
+
+def _pair(words: list[str]) -> str:
+    people = _load("hermes_hermai_people", "people.py")
+    person = people.person_id(words[0]) if words else None
+    if not person:
+        return "Usage: /hermai pair <person>, like /hermai pair kayla"
+    code, _expires = _people().start_pairing(person)
+    lines = [f"Pairing code for {people.display_name(person)}'s phone, good for 15 minutes and once only:", "", code, "",
+             "In the Hermai app, choose Pair this phone, enter the Hermes address and paste this code."]
+    if person != people.OWNER:
+        lines.append(f"Until Hermes can keep each person's memories apart, {people.display_name(person)}'s phone can pair "
+                     "but not talk to Athena yet.")
+    return "\n".join(lines)
+
+
+def _phones(words: list[str]) -> str:
+    people = _load("hermes_hermai_people", "people.py")
+    if words[:1] == ["remove"] and len(words) == 2:
+        return "Removed." if _people().revoke(words[1]) else f"No paired phone with the id {words[1]}."
+    devices = _people().devices()
+    if not devices:
+        return "No phones are paired with Hermai. /hermai pair <person> makes a pairing code."
+    lines = ["Paired phones (/hermai phones remove <id> to unpair one):"]
+    for d in sorted(devices, key=lambda d: d.get("paired", 0)):
+        lines.append(f"  {d['id']}  {people.display_name(d.get('person') or '?')}: {d.get('name') or 'Phone'}")
+    return "\n".join(lines)
+
+
+def _guard_status() -> str:
     settings = _settings()
     values = settings.current()
     securing = "allowed" if values["allow_securing"] else "guarded too"
@@ -92,7 +140,20 @@ def _slash(_args: str = "") -> str:
     return "\n".join(lines)
 
 
+# Routes a paired phone's token (or a pairing code, for the first) opens. Exact paths only: anything
+# else under /api/plugins/hermai/ still needs a dashboard sign-in.
+PERSON_ROUTES = ("/pair/claim", "/p/hello", "/p/voice", "/p/ask", "/p/audio")
+
+
 def register(ctx) -> None:
     ctx.register_hook("pre_tool_call", _pre_tool_call)
     ctx.register_hook("pre_llm_call", _pre_llm_call)
-    ctx.register_command("hermai", handler=_slash, description="Show what Hermai's guard allows")
+    ctx.register_command("hermai", handler=_slash,
+                         description="Hermai: the guard's settings; pair <person> to pair a phone; phones to list them")
+    register_auth = getattr(ctx, "register_dashboard_auth_provider", None)
+    if register_auth is None:
+        return  # an older Hermes: phones can't pair, the tablets still work
+    register_auth(_load("hermes_hermai_people", "people.py").make_provider(_people()))
+    from hermes_cli.dashboard_auth.token_auth import register_token_route
+    for path in PERSON_ROUTES:
+        register_token_route("/api/plugins/hermai" + path)

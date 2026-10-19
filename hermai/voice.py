@@ -113,8 +113,9 @@ def join_wavs(parts: list[bytes]) -> bytes:
 # --- one chat turn with Athena -----------------------------------------------------------------
 
 class Chats:
-    """Which stored Hermes session each herma continues, and the room it's in:
-    ``{herma: {"session": id, "room": name}}``."""
+    """Which stored Hermes session each herma or paired phone continues, and what Athena is told
+    about it: ``{herma: {"session": id, "room": name}}``, and for a phone also its ``person`` and
+    ``device`` name."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -124,11 +125,11 @@ class Chats:
         with self._lock:
             return (self._read().get(herma) or {}).get("session")
 
-    def set(self, herma: str, session_id: str | None, room: str) -> None:
+    def set(self, herma: str, session_id: str | None, room: str, about: dict | None = None) -> None:
         with self._lock:
             data = self._read()
             if session_id:
-                data[herma] = {"session": session_id, "room": room}
+                data[herma] = {"session": session_id, "room": room, **(about or {})}
             else:
                 data.pop(herma, None)
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -138,12 +139,17 @@ class Chats:
 
     def room_of_session(self, *session_ids: str) -> str | None:
         """The room whose herma chat is one of these sessions, or None for any other chat."""
+        entry = self.entry_of_session(*session_ids)
+        return None if entry is None else str(entry.get("room") or "")
+
+    def entry_of_session(self, *session_ids: str) -> dict | None:
+        """The herma or phone chat that is one of these sessions, or None for any other chat."""
         wanted = {s for s in session_ids if s}
         if not wanted:
             return None
         for entry in self._read().values():
             if isinstance(entry, dict) and entry.get("session") in wanted:
-                return str(entry.get("room") or "")
+                return dict(entry)
         return None
 
     def _read(self) -> dict:
@@ -222,8 +228,10 @@ def chat_title(room: str) -> str:
     return f"Hermai · {room}"
 
 
-async def ask(text: str, herma: str, room: str, chats: Chats, url: str | None = None) -> str:
-    """Send one message to Athena in the herma's own conversation and return the full reply."""
+async def ask(text: str, herma: str, room: str, chats: Chats, url: str | None = None,
+              title: str | None = None, about: dict | None = None) -> str:
+    """Send one message to Athena in the herma's own conversation and return the full reply.
+    ``title`` names a new chat (a room's by default); ``about`` is kept with it for the turn note."""
     import websockets
     deadline = time.monotonic() + TURN_TIMEOUT_S
     async with websockets.connect(url or _gateway_url(), max_size=None, open_timeout=20) as ws:
@@ -239,13 +247,13 @@ async def ask(text: str, herma: str, room: str, chats: Chats, url: str | None = 
                     # A long chat gets a new stored id when it's compressed; follow it, so the room
                     # note keeps finding this chat.
                     if session_id and resumed.get("stored_session_id") not in (None, "", stored):
-                        chats.set(herma, resumed["stored_session_id"], room)
+                        chats.set(herma, resumed["stored_session_id"], room, about)
                 except VoiceError:
                     session_id = None  # deleted in the WebUI, say; start a new one
             if not session_id:
-                created = await rpc.call("session.create", {"title": chat_title(room), "source": SESSION_SOURCE})
+                created = await rpc.call("session.create", {"title": title or chat_title(room), "source": SESSION_SOURCE})
                 session_id = created.get("session_id")
-                chats.set(herma, created.get("stored_session_id") or session_id, room)
+                chats.set(herma, created.get("stored_session_id") or session_id, room, about)
             if not session_id:
                 raise VoiceError("Hermes didn't open a chat session")
             await rpc.call("prompt.submit", {"session_id": session_id, "text": text,
@@ -291,10 +299,11 @@ class Replies:
             return self._items.get(key)
 
 
-async def turn(text: str, herma: str, room: str, chats: Chats, replies: Replies) -> dict:
+async def turn(text: str, herma: str, room: str, chats: Chats, replies: Replies,
+               title: str | None = None, about: dict | None = None) -> dict:
     """Ask, then speak: ``{"reply": ..., "audio": id or None}``. A reply that can't be spoken
     still comes back as text for the screen."""
-    reply = await ask(text, herma, room, chats)
+    reply = await ask(text, herma, room, chats, title=title, about=about)
     if not reply:
         return {"reply": "", "audio": None}
     loop = asyncio.get_running_loop()
