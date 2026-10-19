@@ -49,7 +49,7 @@ targets:
     type: ""
     platform: iOS
     legacy:
-      toolPath: /usr/bin/make
-      arguments: $(ACTION)
+      toolPath: /bin/sh
+      arguments: build-wireguard-go.sh $(ACTION)
       passSettings: true
-      workingDirectory: ${BUILD_DIR%Build/*}SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo
+      workingDirectory: $(SRCROOT)
