@@ -26,5 +26,5 @@ Needed before Hermai phase 3 (voice recognition). Phases 0 to 2 run single-speak
 - Hermai stamps each herma turn's author id as `person:<id>` (`kayla`, `elliot`, `ty`, `savannah`) only on a confident voiceprint match, else `person:guest`. Holonomic reads it from `on_turn_start` `author_id` / `sync_turn` `turn_author`.
 - Once a session has had one `person:` turn, an unstamped turn in it opens no store. Sessions never stamped keep the owner store as today.
 - The People page writes `holonomic.json`: `owner` (`"kayla"`) and `people` (`{"elliot": {"remembered": true}, ...}`). `remembered: false` means nothing written or recalled.
-- Holonomic's plan: /mnt/project-files/hermai/holonomic-multi-user-plan.md
+- Holonomic's own plan is in the project files at `hermai/holonomic-multi-user-plan.md`.
 - Update 2026-10-19 (holonomic 0.34.0 built, awaiting Kayla's merge): Hermai must stamp EVERY herma turn, `person:<id>` or `person:guest`. An unstamped first turn of a new room session would open Kayla's store. Until voice recognition exists (phases 1-2), herma turns are stamped `person:guest`, so nothing said at a herma is remembered yet. Libraries are per person; subagents get no memory once people are set.
