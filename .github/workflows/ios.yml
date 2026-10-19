@@ -15,10 +15,11 @@ jobs:
         working-directory: ios
     steps:
       - uses: actions/checkout@v5
-      # WireGuardKit's Go half is built with Go during the Xcode build.
+      # WireGuardKit's Go half is built with Go during the Xcode build. Its pinned golang.org/x/net
+      # links to syscall internals that Go 1.23 refuses ("invalid reference to syscall.recvmsg"), so 1.22.
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.23"
+          go-version: "1.22"
       - run: brew install xcodegen
       - run: xcodegen generate
       # Packages go in DerivedData/SourcePackages, where the WireGuardGoBridge target looks for them.
