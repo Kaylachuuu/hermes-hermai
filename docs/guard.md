@@ -22,7 +22,7 @@ On the Hermes server, as the user Hermes runs as:
 sync-plugin hermai --restart
 ```
 
-Then add `hermai` under `plugins.enabled` in `config.yaml`, next to your other plugins, and restart again. `/hermai` in chat shows what the guard allows.
+Then turn it on with `hermes plugins enable hermai` (or from the `hermes plugins` menu) and restart again. `/hermai` in chat shows what the guard allows.
 
 ## Settings
 

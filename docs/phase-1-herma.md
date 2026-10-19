@@ -4,7 +4,7 @@ One tablet, push-to-talk: hold the button on the screen, or the side key, say so
 
 ## On Hermes
 
-1. Update the plugin: `sync-plugin.sh hermai` (or `git pull` in your checkout of this repo), then restart the dashboard. The plugin now has the routes the tablets use, at `/api/plugins/hermai/`.
+1. Update the plugin: `sync-plugin hermai --restart` (add `--branch claude/project-thread-bkcgqj` until this is merged). The first time, run `hermes plugins enable hermai` too. The plugin now has the routes the tablets use, at `/api/plugins/hermai/`.
 2. Make sure speech is set up in `config.yaml`: `stt:` for hearing and `tts:` for Athena's voice. These are the same settings Petasos uses, so if the Car Thing talks, a herma will too.
 3. The dashboard has to be reachable from the tablet, for example `http://10.0.0.20:9119`, with password sign-in turned on. That's already true if the Car Thing works.
 
