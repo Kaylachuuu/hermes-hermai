@@ -133,3 +133,172 @@ def voice_audio(key: str) -> Response:
 @router.get("/status")
 def status() -> dict:
     return {"hermas": _state()[0].all()}
+
+
+# --- paired phones -------------------------------------------------------------------------------
+# These routes take a Hermai token (or, for /pair/claim, a pairing code) instead of a dashboard
+# sign-in; the plugin registers them with Hermes' token sign-in, and the token says whose phone it is.
+
+def _people_module():
+    return _load("hermes_hermai_people", "people.py")
+
+
+def _people():
+    from hermes_constants import get_hermes_home
+    return _people_module().shared(Path(get_hermes_home()) / "hermai" / "people.json")
+
+
+def _bearer(request: Request) -> str:
+    auth = request.headers.get("authorization") or ""
+    return auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+
+
+def _principal(request: Request, scope: str):
+    principal = getattr(request.state, "token_principal", None)
+    if principal is None or principal.provider != "hermai-devices" or scope not in principal.scopes:
+        raise HTTPException(status_code=401, detail="this route takes a Hermai phone's sign-in")
+    return principal
+
+
+def _phone(request: Request) -> dict:
+    """The paired phone making this request: ``{"id", "person", "name"}``."""
+    _principal(request, "hermai")
+    device = _people().device(_bearer(request))
+    if device is None:
+        raise HTTPException(status_code=401, detail="this phone isn't paired any more")
+    return device
+
+
+def _holonomic_json() -> Path:
+    from hermes_constants import get_hermes_home
+    return Path(get_hermes_home()) / "holonomic.json"
+
+
+def _why_not_talk(person: str) -> str | None:
+    """Why this person's phone can't talk to Athena yet, or None when it can. The owner always can;
+    anyone else needs their turns labelled with who is speaking (the API server) and holonomic set
+    up to keep their memories apart, so nothing they say opens the owner's."""
+    people = _people_module()
+    if person == people.OWNER:
+        return None
+    if _voice().api_server() is None:
+        return "Hermes' API server isn't set up, so Athena can't tell whose phone is speaking"
+    return people.memory_closed(_holonomic_json(), person)
+
+
+def _may_talk(device: dict) -> None:
+    reason = _why_not_talk(device["person"])
+    if reason:
+        name = _people_module().display_name(device["person"])
+        raise HTTPException(status_code=403, detail=f"{name}'s phone can't talk to Athena yet: {reason}.")
+
+
+@router.post("/pair/claim")
+def pair_claim(request: Request, body: dict) -> dict:
+    """A phone trading its one-time pairing code (sent as its bearer token) for its own token."""
+    _principal(request, "hermai-pair")
+    name = body.get("device") if isinstance(body, dict) else None
+    claimed = _people().claim(_bearer(request), name)
+    if claimed is None:
+        raise HTTPException(status_code=401, detail="that pairing code has expired or was used already")
+    token, person, device_id = claimed
+    people = _people_module()
+    return {"token": token, "person": person, "name": people.display_name(person), "device": device_id,
+            "agent": "Athena", "may_talk": _why_not_talk(person) is None}
+
+
+@router.post("/p/hello")
+def phone_hello(request: Request) -> dict:
+    device = _phone(request)
+    people = _people_module()
+    return {"person": device["person"], "name": people.display_name(device["person"]), "device": device["name"],
+            "agent": "Athena", "may_talk": _why_not_talk(device["person"]) is None}
+
+
+def _phone_chat(device: dict) -> tuple[str, dict, str]:
+    """The phone's chat key, what the turn note needs, and the chat's title."""
+    name = _people_module().display_name(device["person"])
+    return (f"phone-{device['id']}", {"person": device["person"], "device": device["name"]},
+            f"Hermai · {name}'s {device['name']}")
+
+
+async def _phone_turn(text: str, device: dict) -> dict:
+    v = _voice()
+    _, chats, replies = _state()
+    key, about, title = _phone_chat(device)
+    # Labelled with who is speaking whenever the API server is there; the owner's phone falls back
+    # to the dashboard's chat connection without it (unlabelled turns are hers to holonomic).
+    author = None
+    if v.api_server() is not None:
+        author = {"id": f"person:{device['person']}", "name": _people_module().display_name(device["person"])}
+    try:
+        return await v.turn(text, key, "", chats, replies, title=title, about=about, author=author)
+    except v.VoiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+
+
+@router.post("/p/voice")
+async def phone_voice(request: Request) -> dict:
+    device = _phone(request)
+    _may_talk(device)
+    audio = await request.body()
+    if not audio:
+        raise HTTPException(status_code=400, detail="empty recording")
+    if len(audio) > MAX_SPEECH_BYTES:
+        raise HTTPException(status_code=413, detail="recording too long")
+    v = _voice()
+    try:
+        heard = await asyncio.get_running_loop().run_in_executor(None, v.transcribe, audio)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"couldn't transcribe: {exc}"[:300]) from None
+    if not heard:
+        return {"heard": "", "reply": "", "audio": None}
+    return {"heard": heard, **await _phone_turn(heard, device)}
+
+
+@router.post("/p/ask")
+async def phone_ask(request: Request, body: dict) -> dict:
+    device = _phone(request)
+    _may_talk(device)
+    text = body.get("text") if isinstance(body, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(status_code=400, detail="text required")
+    return {"heard": text.strip(), **await _phone_turn(text.strip(), device)}
+
+
+@router.get("/p/audio")
+def phone_audio(request: Request, key: str = "") -> Response:
+    _phone(request)
+    return voice_audio(key)
+
+
+@router.get("/pair")
+def pair_page(request: Request, person: str = "") -> Response:
+    """A page for a signed-in browser: a pairing code for ``person``'s phone, as a QR code the
+    Hermai app scans (with this server's address in it) and as text."""
+    from fastapi.responses import HTMLResponse
+    import html
+    people = _people_module()
+    pid = people.person_id(person)
+    if not pid:
+        raise HTTPException(status_code=400, detail="add ?person=<id>, like ?person=kayla")
+    code, _expires = _people().start_pairing(pid)
+    server = str(request.base_url).rstrip("/")
+    link = f"hermai://pair?server={server}&code={code}"
+    try:
+        import qrcode
+        import qrcode.image.svg
+        img = qrcode.make(link, image_factory=qrcode.image.svg.SvgPathImage, box_size=12)
+        qr = img.to_string(encoding="unicode")
+    except Exception:
+        qr = "<p>(QR codes need the qrcode package on Hermes; use the code below.)</p>"
+    who = html.escape(people.display_name(pid))
+    reason = _why_not_talk(pid)
+    note = "" if reason is None else f"<p>{who}'s phone can pair now, but can't talk to Athena yet: {html.escape(reason)}.</p>"
+    body = (f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+            f"<title>Pair {who}'s phone</title><body style='font-family:system-ui;max-width:32rem;margin:2rem auto;padding:0 1rem'>"
+            f"<h1>Pair {who}'s phone</h1><p>In the Hermai app, tap <b>Pair this phone</b> and scan this. "
+            f"It works once, within 15 minutes.</p><div style='background:#fff;padding:1rem;display:inline-block'>{qr}</div>"
+            f"<p>Or enter <b>{html.escape(server)}</b> and this code:</p>"
+            f"<p style='word-break:break-all;font-family:monospace'>{html.escape(code)}</p>{note}</body>")
+    return HTMLResponse(body, headers={"Cache-Control": "no-store"})

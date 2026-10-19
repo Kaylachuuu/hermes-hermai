@@ -161,3 +161,70 @@ def test_the_household_note_gives_the_time(monkeypatch):
     finally:
         monkeypatch.delenv("TZ")
         time.tzset()
+
+
+class _FakeApi:
+    """A stand-in for Hermes' API server: session create and session chat."""
+
+    def __init__(self):
+        import http.server
+        import threading
+        self.calls, self.sessions, self.made = [], set(), 0
+        api = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_a):
+                pass
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                api.calls.append((self.path, self.headers.get("Authorization"), body))
+                if self.path == "/api/sessions":
+                    api.made += 1
+                    sid = f"s{api.made}"
+                    api.sessions.add(sid)
+                    return self._send(201, {"session": {"id": sid}})
+                sid = self.path.split("/")[3]
+                if sid not in api.sessions:
+                    return self._send(404, {"error": {"message": "Session not found"}})
+                return self._send(200, {"session_id": sid, "message": {"content": f" Hi {body['author']['name']}. "}})
+
+            def _send(self, code, data):
+                raw = json.dumps(data).encode()
+                self.send_response(code)
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+
+def test_a_labelled_turn_carries_its_author_and_keeps_its_chat(tmp_path):
+    api = _FakeApi()
+    try:
+        chats = voice.Chats(tmp_path / "chats.json")
+        author = {"id": "person:elliot", "name": "Elliot"}
+        about = {"person": "elliot", "device": "Pixel"}
+        reply = voice.ask_as("hello", "phone-abc", chats, author, "Hermai · Elliot's Pixel", about, api=(api.base, "key"))
+        assert reply == "Hi Elliot."
+        assert api.calls[0] == ("/api/sessions", "Bearer key", {"title": "Hermai · Elliot's Pixel", "source": "hermai"})
+        assert api.calls[1][2] == {"message": "hello", "author": author}
+        assert chats.entry_of_session("s1") == {"session": "s1", "room": "", **about}
+        voice.ask_as("again", "phone-abc", chats, author, "t", about, api=(api.base, "key"))
+        assert [c[0] for c in api.calls[2:]] == ["/api/sessions/s1/chat"]  # resumed, not reopened
+        api.sessions.clear()  # deleted in the WebUI
+        voice.ask_as("still there?", "phone-abc", chats, author, "t", about, api=(api.base, "key"))
+        assert chats.get("phone-abc") == "s2"
+    finally:
+        api.server.shutdown()
+
+
+def test_no_api_server_key_means_no_labelled_turns(monkeypatch):
+    monkeypatch.delenv("API_SERVER_KEY", raising=False)
+    assert voice.api_server() is None
+    monkeypatch.setenv("API_SERVER_KEY", "abc")
+    monkeypatch.setenv("API_SERVER_HOST", "0.0.0.0")
+    monkeypatch.setenv("API_SERVER_PORT", "9000")
+    assert voice.api_server() == ("http://127.0.0.1:9000", "abc")

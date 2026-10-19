@@ -1,0 +1,30 @@
+# The free-account build: Hermai without its own VPN, for a free Apple account's Personal Team.
+# Apple gives free accounts no VPN extensions, so this leaves out HermaiTunnel and WireGuardKit; use
+# the WireGuard app for the VPN instead. Installs from Xcode on a Mac and lasts 7 days per install.
+#   xcodegen --spec project-personal.yml && open HermaiPersonal.xcodeproj
+name: HermaiPersonal
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+targets:
+  Hermai:
+    type: application
+    platform: iOS
+    sources:
+      - path: Hermai
+        excludes: [Hermai.entitlements]
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_NAME: Hermai
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kaylachuuu.hermai.personal
+        INFOPLIST_FILE: Hermai/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NO_TUNNEL"

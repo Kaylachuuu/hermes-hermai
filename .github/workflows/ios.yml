@@ -1,0 +1,112 @@
+name: iPhone app
+
+on:
+  push:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v5
+      # WireGuardKit's Go half is built with Go during the Xcode build. Its pinned golang.org/x/net
+      # links to syscall internals that Go 1.23 refuses ("invalid reference to syscall.recvmsg"), so 1.22.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      # Packages go in DerivedData/SourcePackages, where the WireGuardGoBridge target looks for them.
+      - run: xcodebuild -resolvePackageDependencies -project Hermai.xcodeproj -scheme Hermai -derivedDataPath build/DerivedData
+      - run: ./patch-wireguardkit.sh build/DerivedData
+      # A compile check without signing; signing and TestFlight come with Kayla's App Store Connect key.
+      - run: >
+          xcodebuild build -project Hermai.xcodeproj -scheme Hermai
+          -destination 'generic/platform=iOS' -configuration Debug
+          -derivedDataPath build/DerivedData
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          > build.log 2>&1
+          || { awk '/^ExternalBuildToolExecution/,/^$/' build.log | grep -vE '^    export ' | tail -120;
+               grep -E 'error|fatal|go: ' build.log | grep -v ' -x c ' | head -60; exit 1; }
+        shell: bash
+      # The free-account build (no VPN of its own), so it keeps compiling too.
+      - run: >
+          xcodegen generate --spec project-personal.yml
+          && xcodebuild build -project HermaiPersonal.xcodeproj -scheme Hermai
+          -destination 'generic/platform=iOS' -configuration Debug -derivedDataPath build/Personal
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO > personal.log 2>&1
+          || { grep -E 'error' personal.log | head -60; tail -30 personal.log; exit 1; }
+        shell: bash
+
+  # Signs the app and puts it on TestFlight, for pushes to main or a manual run. Needs the repo secrets
+  # ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the .p8 file's text) and APPLE_TEAM_ID; skipped without them.
+  testflight:
+    needs: build
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+        shell: bash
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - id: secrets
+        working-directory: .
+        run: |
+          if [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && [ -n "$ASC_KEY_P8" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::TestFlight skipped: the App Store Connect secrets aren't set (see docs/phones.md)."
+          fi
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@v5
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+      - if: steps.secrets.outputs.ready == 'true'
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild -resolvePackageDependencies -project Hermai.xcodeproj -scheme Hermai -derivedDataPath build/DerivedData
+          ./patch-wireguardkit.sh build/DerivedData
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+      - if: steps.secrets.outputs.ready == 'true'
+        name: Archive
+        run: >
+          xcodebuild archive -project Hermai.xcodeproj -scheme Hermai -configuration Release
+          -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData
+          -archivePath build/Hermai.xcarchive
+          -allowProvisioningUpdates
+          -authenticationKeyPath "$RUNNER_TEMP/asc.p8" -authenticationKeyID "$ASC_KEY_ID"
+          -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          HERMAI_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+          > archive.log 2>&1
+          || { grep -E 'error|fatal' archive.log | grep -v ' -x c ' | head -60; tail -40 archive.log; exit 1; }
+      - if: steps.secrets.outputs.ready == 'true'
+        name: Upload to TestFlight
+        run: |
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/Hermai.xcarchive -exportPath build/export \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
