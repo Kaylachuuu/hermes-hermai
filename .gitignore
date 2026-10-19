@@ -7,3 +7,5 @@ android/app/build/
 android/local.properties
 android/.idea/
 *.iml
+ios/Hermai.xcodeproj/
+ios/build/

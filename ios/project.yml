@@ -1,0 +1,55 @@
+name: Hermai
+options:
+  bundleIdPrefix: io.github.kaylachuuu
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: $(HERMAI_TEAM)
+    CODE_SIGN_STYLE: Automatic
+packages:
+  WireGuardKit:
+    url: https://github.com/WireGuard/wireguard-apple
+    exactVersion: 1.0.15-26
+targets:
+  Hermai:
+    type: application
+    platform: iOS
+    sources: [Hermai]
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kaylachuuu.hermai
+        INFOPLIST_FILE: Hermai/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Hermai/Hermai.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - target: HermaiTunnel
+        embed: true
+  HermaiTunnel:
+    type: app-extension
+    platform: iOS
+    sources: [HermaiTunnel]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kaylachuuu.hermai.tunnel
+        INFOPLIST_FILE: HermaiTunnel/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HermaiTunnel/HermaiTunnel.entitlements
+        # WireGuardKit's Go half is built by the WireGuardGoBridge target below.
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+    dependencies:
+      - target: WireGuardGoBridge
+      - package: WireGuardKit
+  # WireGuard's Go implementation, built with make from the package checkout, as wireguard-apple's README says.
+  WireGuardGoBridge:
+    type: ""
+    platform: iOS
+    legacy:
+      toolPath: /usr/bin/make
+      arguments: $(ACTION)
+      passSettings: true
+      workingDirectory: ${BUILD_DIR%Build/*}SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo

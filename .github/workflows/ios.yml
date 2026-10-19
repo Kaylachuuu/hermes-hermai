@@ -1,0 +1,33 @@
+name: iPhone app
+
+on:
+  push:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v5
+      # WireGuardKit's Go half is built with Go during the Xcode build.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.23"
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - run: xcodebuild -resolvePackageDependencies -project Hermai.xcodeproj -scheme Hermai -clonedSourcePackagesDirPath build/SourcePackages
+      # A compile check without signing; signing and TestFlight come with Kayla's App Store Connect key.
+      - run: >
+          xcodebuild build -project Hermai.xcodeproj -scheme Hermai
+          -destination 'generic/platform=iOS' -configuration Debug
+          -clonedSourcePackagesDirPath build/SourcePackages -derivedDataPath build/DerivedData
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          | tail -200
+          ; exit ${PIPESTATUS[0]}
+        shell: bash

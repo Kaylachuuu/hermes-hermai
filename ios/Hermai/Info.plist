@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleDisplayName</key><string>Hermai</string>
+	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key><string>Hermai pairing</string>
+			<key>CFBundleURLSchemes</key><array><string>hermai</string></array>
+		</dict>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key><false/>
+	<key>LSRequiresIPhoneOS</key><true/>
+	<key>NSCameraUsageDescription</key><string>Hermai scans the QR codes that pair this phone and set up its VPN.</string>
+	<key>NSMicrophoneUsageDescription</key><string>Hermai records what you say to Athena while you hold the button.</string>
+	<key>NSFaceIDUsageDescription</key><string>Hermai uses Face ID before Athena opens a lock, the alarm or the garage.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Hermes is reached over the home network or WireGuard, by plain HTTP like the dashboard itself. -->
+		<key>NSAllowsArbitraryLoads</key><true/>
+	</dict>
+	<key>UILaunchScreen</key><dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>
