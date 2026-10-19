@@ -50,3 +50,23 @@ and an App Store Connect app for the first one come first. Without the secrets t
 The app says it uses no non-exempt encryption (`ITSAppUsesNonExemptEncryption`), so TestFlight asks no export
 questions. WireGuard is standard, publicly available encryption; if the app ever goes on the App Store, check
 that answer with Apple's export compliance guidance first.
+
+## Trying the iPhone app with a free Apple account
+
+A free account (a Personal Team in Xcode) can put Hermai on your own iPhone from a Mac, with three limits:
+no VPN of its own (Apple gives free accounts no VPN extensions, so use the WireGuard app), the phone is
+plugged in to install, and each install stops opening after 7 days until it's installed again.
+
+On the Mac, with Xcode installed:
+
+1. `brew install xcodegen`, then `git clone https://github.com/Kaylachuuu/hermes-hermai.git` and
+   `cd hermes-hermai/ios` (until the PR merges, first `git checkout claude/project-thread-bkcgqj`).
+2. `xcodegen generate --spec project-personal.yml && open HermaiPersonal.xcodeproj`
+3. In Xcode, Settings, Accounts: add your Apple ID. Then select the Hermai target, Signing & Capabilities,
+   and pick your name (Personal Team) as the Team.
+4. Plug in the iPhone and unlock it. On the phone, turn on Settings, Privacy & Security, Developer Mode
+   (it restarts). Choose the iPhone at the top of Xcode and press Run.
+5. The first time, the phone says the developer isn't trusted: Settings, General, VPN & Device Management,
+   your Apple ID, Trust. Then open Hermai and pair it.
+
+After 7 days, plug it in and press Run again; pairing and settings stay.

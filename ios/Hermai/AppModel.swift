@@ -18,7 +18,9 @@ final class AppModel: ObservableObject {
 
     init() {
         recorder.onFinishedPlaying = { [weak self] in Task { @MainActor in self?.phase = .ready } }
+        #if !NO_TUNNEL
         Task { await tunnel.load() }
+        #endif
     }
 
     private var hermes: Hermes { Hermes(server: Store.server, token: Store.token) }

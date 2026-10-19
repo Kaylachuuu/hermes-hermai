@@ -35,6 +35,14 @@ jobs:
           || { awk '/^ExternalBuildToolExecution/,/^$/' build.log | grep -vE '^    export ' | tail -120;
                grep -E 'error|fatal|go: ' build.log | grep -v ' -x c ' | head -60; exit 1; }
         shell: bash
+      # The free-account build (no VPN of its own), so it keeps compiling too.
+      - run: >
+          xcodegen generate --spec project-personal.yml
+          && xcodebuild build -project HermaiPersonal.xcodeproj -scheme Hermai
+          -destination 'generic/platform=iOS' -configuration Debug -derivedDataPath build/Personal
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO > personal.log 2>&1
+          || { grep -E 'error' personal.log | head -60; tail -30 personal.log; exit 1; }
+        shell: bash
 
   # Signs the app and puts it on TestFlight, for pushes to main or a manual run. Needs the repo secrets
   # ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the .p8 file's text) and APPLE_TEAM_ID; skipped without them.

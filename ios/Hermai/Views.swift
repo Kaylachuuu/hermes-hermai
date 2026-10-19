@@ -159,6 +159,11 @@ struct VPNSection: View {
     @State private var problem = ""
 
     var body: some View {
+        #if NO_TUNNEL
+        // The free-account build (project-personal.yml): Apple gives free accounts no VPN extensions.
+        Text("Away from home, turn on the WireGuard app's VPN first; this build of Hermai has none of its own.")
+            .foregroundColor(.gray)
+        #else
         VPNControls(tunnel: model.tunnel, scanning: $scanning, problem: $problem)
             .sheet(isPresented: $scanning) {
                 ScannerView { text in
@@ -169,6 +174,7 @@ struct VPNSection: View {
                     }
                 }
             }
+        #endif
     }
 }
 
