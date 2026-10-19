@@ -1,0 +1,6 @@
+name: hermai
+version: 0.1.0
+description: "Hermai, Athena as the voice of the house: guards locks, the alarm and the garage against Home Assistant calls that unlock, disarm or open them."
+author: "Kaylachuuu"
+provides_hooks:
+  - pre_tool_call

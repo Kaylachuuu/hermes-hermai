@@ -6,10 +6,11 @@ Each herma talks to Athena on Hermes, the same way a Petasos device does, and sh
 
 ## Status
 
-Planning, then phase 0. No code yet.
+Phase 0, with the first code: the guard that keeps Athena's hands off locks, the alarm and the garage.
 
 - **Plan:** the living plan, with decisions and the architecture, is the Hermai plan doc: https://claude.ai/code/artifact/2da05236-48f0-4ad1-96a2-6ee914978334
 - **Phase 0:** Athena controls the house from the Hermes WebUI. Setup steps: [docs/phase-0-setup.md](docs/phase-0-setup.md).
+- **Guard:** what it refuses and how to install it: [docs/guard.md](docs/guard.md).
 - **Memory per person:** what Hermai and holonomic agreed: [docs/holonomic.md](docs/holonomic.md).
 
 ## The pieces
@@ -20,7 +21,7 @@ Planning, then phase 0. No code yet.
 | Android client | This repo, a Petasos client for Android | Phase 1 |
 | Voice turns, per-device chats | `hermes-petasos` plugin on Hermes | Exists; gains a shared-device note |
 | Home Assistant tools | Official `homeassistant` plugin from the Hermes catalog | Phase 0 |
-| Permission guard | This repo, a Hermes `pre_tool_call` hook in front of `ha_call_service` | First code |
+| Permission guard | This repo, `hermai/`: a Hermes `pre_tool_call` hook in front of `ha_call_service` | Built; per-person settings in phase 3 |
 | Voice recognition | Voiceprints on Hermes (SpeechBrain ECAPA) | Phase 3 |
 | Memory per person | `hermes-holonomic-memory` 0.34.0 | Built, awaiting merge |
 | Tone | Audio to Athena, or an "ears" model on the 16 GB V100 | Phase 4 |
@@ -36,3 +37,11 @@ Planning, then phase 0. No code yet.
 ## Household
 
 Kayla, Elliot, Ty and Savannah are enrolled. Guests are never remembered and get limited controls. Locks, alarm and garage are never controlled by voice alone: each person's setting is either never, or with a confirmation on Kayla's phone.
+
+## Tests
+
+```sh
+python -m pytest hermai/tests
+```
+
+`test_in_hermes.py` loads the plugin into a real Hermes and is skipped when Hermes isn't installed.
