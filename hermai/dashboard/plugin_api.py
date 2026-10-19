@@ -169,12 +169,28 @@ def _phone(request: Request) -> dict:
     return device
 
 
-def _may_talk(device: dict) -> None:
+def _holonomic_json() -> Path:
+    from hermes_constants import get_hermes_home
+    return Path(get_hermes_home()) / "holonomic.json"
+
+
+def _why_not_talk(person: str) -> str | None:
+    """Why this person's phone can't talk to Athena yet, or None when it can. The owner always can;
+    anyone else needs their turns labelled with who is speaking (the API server) and holonomic set
+    up to keep their memories apart, so nothing they say opens the owner's."""
     people = _people_module()
-    if device["person"] != people.OWNER:
-        raise HTTPException(status_code=403, detail=(
-            f"Athena can't keep {people.display_name(device['person'])}'s memories apart from "
-            f"{people.display_name(people.OWNER)}'s yet, so this phone can't talk to her until that's built."))
+    if person == people.OWNER:
+        return None
+    if _voice().api_server() is None:
+        return "Hermes' API server isn't set up, so Athena can't tell whose phone is speaking"
+    return people.memory_closed(_holonomic_json(), person)
+
+
+def _may_talk(device: dict) -> None:
+    reason = _why_not_talk(device["person"])
+    if reason:
+        name = _people_module().display_name(device["person"])
+        raise HTTPException(status_code=403, detail=f"{name}'s phone can't talk to Athena yet: {reason}.")
 
 
 @router.post("/pair/claim")
@@ -188,7 +204,7 @@ def pair_claim(request: Request, body: dict) -> dict:
     token, person, device_id = claimed
     people = _people_module()
     return {"token": token, "person": person, "name": people.display_name(person), "device": device_id,
-            "agent": "Athena", "may_talk": person == people.OWNER}
+            "agent": "Athena", "may_talk": _why_not_talk(person) is None}
 
 
 @router.post("/p/hello")
@@ -196,7 +212,7 @@ def phone_hello(request: Request) -> dict:
     device = _phone(request)
     people = _people_module()
     return {"person": device["person"], "name": people.display_name(device["person"]), "device": device["name"],
-            "agent": "Athena", "may_talk": device["person"] == people.OWNER}
+            "agent": "Athena", "may_talk": _why_not_talk(device["person"]) is None}
 
 
 def _phone_chat(device: dict) -> tuple[str, dict, str]:
@@ -210,8 +226,13 @@ async def _phone_turn(text: str, device: dict) -> dict:
     v = _voice()
     _, chats, replies = _state()
     key, about, title = _phone_chat(device)
+    # Labelled with who is speaking whenever the API server is there; the owner's phone falls back
+    # to the dashboard's chat connection without it (unlabelled turns are hers to holonomic).
+    author = None
+    if v.api_server() is not None:
+        author = {"id": f"person:{device['person']}", "name": _people_module().display_name(device["person"])}
     try:
-        return await v.turn(text, key, "", chats, replies, title=title, about=about)
+        return await v.turn(text, key, "", chats, replies, title=title, about=about, author=author)
     except v.VoiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from None
 
@@ -272,8 +293,8 @@ def pair_page(request: Request, person: str = "") -> Response:
     except Exception:
         qr = "<p>(QR codes need the qrcode package on Hermes; use the code below.)</p>"
     who = html.escape(people.display_name(pid))
-    note = ("" if pid == people.OWNER else
-            f"<p>{who}'s phone can pair now, but can't talk to Athena until Hermes keeps each person's memories apart.</p>")
+    reason = _why_not_talk(pid)
+    note = "" if reason is None else f"<p>{who}'s phone can pair now, but can't talk to Athena yet: {html.escape(reason)}.</p>"
     body = (f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
             f"<title>Pair {who}'s phone</title><body style='font-family:system-ui;max-width:32rem;margin:2rem auto;padding:0 1rem'>"
             f"<h1>Pair {who}'s phone</h1><p>In the Hermai app, tap <b>Pair this phone</b> and scan this. "

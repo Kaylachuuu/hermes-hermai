@@ -17,7 +17,14 @@ A code works once, for 15 minutes. Person ids are lowercase, like `kayla`, `elli
 
 ## Who may talk
 
-Only Kayla's phones, for now. Anyone else's phone can pair, but Athena refuses their turns until Hermes can keep each person's memories apart (see [holonomic.md](holonomic.md#where-stamping-stands-2026-10-19)). Otherwise what they say would land in Kayla's memories, and she might recall Kayla's to them.
+Kayla's phones always. Anyone else's phone talks once both of these are true, and is refused (with the reason) until then:
+
+1. Hermes' API server is running with its key (`API_SERVER_KEY` in `~/.hermes/.env`; Hermai reaches it on loopback, port `API_SERVER_PORT` or 8642). Phone turns go through it labelled `person:<id>`, which is how Athena's memory knows who is speaking. The phone's token decides the id; nothing said in a message can change it.
+2. Holonomic is set up for more than one person: `holonomic.json` has `"owner": "kayla"` and lists the person under `people`, for example `"people": {"elliot": {"remembered": true}}`. Each person then gets memories of their own, and `"remembered": false` means Athena keeps nothing for them.
+
+Without both, what they said would land in Kayla's memories, and she might recall Kayla's to them.
+
+The tablets still send unlabelled turns, which open Kayla's memories, so only Kayla should use them until they know voices (see [holonomic.md](holonomic.md#where-stamping-stands-2026-10-19)).
 
 ## How it works
 

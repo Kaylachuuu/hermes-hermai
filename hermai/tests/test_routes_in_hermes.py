@@ -119,6 +119,7 @@ def _pair(client, home, person):
 
 
 def test_a_phone_pairs_and_talks(hermes, monkeypatch):
+    monkeypatch.delenv("API_SERVER_KEY", raising=False)  # the owner falls back to the chat connection
     client, home = hermes
     code = _pair(client, home, "kayla")
     claimed = client.post("/api/plugins/hermai/pair/claim", json={"device": "iPhone"},
@@ -168,14 +169,53 @@ def test_a_phone_token_opens_nothing_else(hermes):
     assert client.post("/api/plugins/hermai/p/hello", headers={"Authorization": f"Bearer {code2}"}).status_code == 401
 
 
-def test_others_phones_pair_but_cannot_talk_yet(hermes):
+def test_others_phones_pair_but_cannot_talk_yet(hermes, monkeypatch):
     client, home = hermes
+    monkeypatch.delenv("API_SERVER_KEY", raising=False)
     code = _pair(client, home, "elliot")
     claimed = client.post("/api/plugins/hermai/pair/claim", json={}, headers={"Authorization": f"Bearer {code}"}).json()
     assert claimed["may_talk"] is False
     phone = {"Authorization": f"Bearer {claimed['token']}"}
     r = client.post("/api/plugins/hermai/p/ask", json={"text": "hi"}, headers=phone)
-    assert r.status_code == 403 and "memories" in r.json()["detail"]
+    assert r.status_code == 403 and "API server" in r.json()["detail"]
+
+    # With the API server but holonomic still set up for one person, still no.
+    monkeypatch.setenv("API_SERVER_KEY", "k" * 40)
+    r = client.post("/api/plugins/hermai/p/ask", json={"text": "hi"}, headers=phone)
+    assert r.status_code == 403 and "one person" in r.json()["detail"]
+
+
+def test_others_phones_talk_as_themselves_once_memory_is_apart(hermes, monkeypatch):
+    import json
+    client, home = hermes
+    monkeypatch.setenv("API_SERVER_KEY", "k" * 40)
+    (home / "holonomic.json").write_text(json.dumps({"owner": "kayla", "people": {"elliot": {"remembered": True}}}))
+    try:
+        code = _pair(client, home, "elliot")
+        claimed = client.post("/api/plugins/hermai/pair/claim", json={"device": "Pixel"},
+                              headers={"Authorization": f"Bearer {code}"}).json()
+        assert claimed["may_talk"] is True
+        voice = sys.modules["hermes_hermai_voice"]
+        seen = {}
+
+        def fake_ask_as(text, chat, chats, author, title, about=None, api=None):
+            seen.update(author=author, title=title)
+            chats.set(chat, "s-elliot", "", about)
+            return "Hi Elliot."
+
+        async def no_ws(*_a, **_kw):
+            raise AssertionError("a labelled turn never goes through the chat connection")
+
+        monkeypatch.setattr(voice, "ask_as", fake_ask_as)
+        monkeypatch.setattr(voice, "ask", no_ws)
+        monkeypatch.setattr(voice, "speak", lambda text: b"RIFF")
+        r = client.post("/api/plugins/hermai/p/ask", json={"text": "hello"},
+                        headers={"Authorization": f"Bearer {claimed['token']}"})
+        assert r.status_code == 200, r.text
+        assert seen["author"] == {"id": "person:elliot", "name": "Elliot"}
+        assert seen["title"] == "Hermai · Elliot's Pixel"
+    finally:
+        (home / "holonomic.json").unlink()
 
 
 def test_pairing_page_needs_the_dashboard_sign_in(hermes):

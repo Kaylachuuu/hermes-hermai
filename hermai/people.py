@@ -47,6 +47,28 @@ def display_name(person: str) -> str:
     return person.replace("-", " ").title()
 
 
+def memory_closed(holonomic_json: Path, person: str) -> str | None:
+    """Why ``person``'s turns couldn't yet be kept apart from the owner's memories, or None when
+    they can: holonomic is set up for more than one person (``people`` in holonomic.json) and
+    knows them, so a turn stamped ``person:<id>`` opens their own store, or none."""
+    if person == OWNER:
+        return None
+    try:
+        cfg = json.loads(Path(holonomic_json).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        cfg = {}
+    except (OSError, ValueError):
+        return "Athena's memory settings (holonomic.json) can't be read"
+    known = cfg.get("people") if isinstance(cfg, dict) else None
+    if not isinstance(known, dict) or not known:
+        return "Athena's memory is set up for one person only (no people in holonomic.json)"
+    if str(cfg.get("owner") or "").strip().lower() != OWNER:
+        return f"holonomic.json doesn't name {display_name(OWNER)} as the owner"
+    if person not in {str(k).strip().lower() for k in known}:
+        return f"{display_name(person)} isn't among the people in holonomic.json"
+    return None
+
+
 def _hash(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 

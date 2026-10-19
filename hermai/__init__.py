@@ -105,8 +105,13 @@ def _pair(words: list[str]) -> str:
     lines = [f"Pairing code for {people.display_name(person)}'s phone, good for 15 minutes and once only:", "", code, "",
              "In the Hermai app, choose Pair this phone, enter the Hermes address and paste this code."]
     if person != people.OWNER:
-        lines.append(f"Until Hermes can keep each person's memories apart, {people.display_name(person)}'s phone can pair "
-                     "but not talk to Athena yet.")
+        from hermes_constants import get_hermes_home
+        if _load("hermes_hermai_voice", "voice.py").api_server() is None:
+            reason = "Hermes' API server isn't set up, so Athena can't tell whose phone is speaking"
+        else:
+            reason = people.memory_closed(Path(get_hermes_home()) / "holonomic.json", person)
+        if reason:
+            lines.append(f"{people.display_name(person)}'s phone can pair, but can't talk to Athena yet: {reason}.")
     return "\n".join(lines)
 
 

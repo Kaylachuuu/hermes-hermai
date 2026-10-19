@@ -31,9 +31,5 @@ Needed before Hermai phase 3 (voice recognition). Phases 0 to 2 run single-speak
 
 ## Where stamping stands (2026-10-19)
 
-Not built yet. Herma and phone turns go over `/api/ws` like Petasos's and carry no author, so once holonomic 0.34.0 is merged they open Kayla's store. That's right while Kayla is the only one using them, and wrong for anyone else. Until stamping works:
-
-- Paired phones belonging to anyone but Kayla can pair but are refused when they try to talk (`people.py`, `/p/` routes).
-- The tablets should only be used by Kayla.
-
-The likely path: Hermes' API server takes an `author` object on `POST /api/sessions/{id}/chat` (`gateway/platforms/api_server.py`, `_request_turn_author`), which labels the turn for memory. Hermai would send person turns there from the server side, with the author from the phone's token or the voiceprint match. That needs the API server running with its key, so it's checked before phase 2b.
+- **Phones: built.** A paired phone's turns go to Hermes' API server (`POST /api/sessions/{id}/chat`) with `author: {"id": "person:<id>", "name": ...}` from the phone's token (`voice.ask_as`). Someone other than Kayla can talk only when the API server has its key and `holonomic.json` lists them under `people` with `owner: "kayla"` (`people.memory_closed`). Kayla's own phone falls back to `/api/ws`, unlabelled, when the API server isn't set up.
+- **Tablets: not yet.** Herma turns still go over `/api/ws` with no author, so they open Kayla's store. They get `person:<id>` or `person:guest` once voiceprints are built; until then only Kayla should use them.

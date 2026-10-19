@@ -59,3 +59,16 @@ def test_ids_and_names():
     assert people.person_id("") is None and people.person_id(None) is None
     assert people.device_name(None) == "Phone" and people.device_name("x" * 99) == "x" * people.DEVICE_NAME_MAX
     assert people.display_name("kayla") == "Kayla"
+
+
+def test_memory_is_apart_only_when_holonomic_knows_the_person(tmp_path):
+    cfg = tmp_path / "holonomic.json"
+    assert people.memory_closed(cfg, "kayla") is None  # the owner, always
+    assert "one person" in people.memory_closed(cfg, "elliot")  # no file yet
+    cfg.write_text(json.dumps({"people": {"elliot": {}}}))
+    assert "owner" in people.memory_closed(cfg, "elliot")
+    cfg.write_text(json.dumps({"owner": "kayla", "people": {"elliot": {"remembered": False}}}))
+    assert people.memory_closed(cfg, "elliot") is None  # not remembered: a guest, which holonomic handles
+    assert "isn't among" in people.memory_closed(cfg, "ty")
+    cfg.write_text("{not json")
+    assert "can't be read" in people.memory_closed(cfg, "elliot")
