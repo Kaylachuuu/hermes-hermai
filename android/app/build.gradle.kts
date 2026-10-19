@@ -11,8 +11,8 @@ android {
         applicationId = "dev.hermai.herma"
         minSdk = 26
         targetSdk = 33 // the Galaxy Tab Active3 stops at Android 13
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
     }
 
     signingConfigs {

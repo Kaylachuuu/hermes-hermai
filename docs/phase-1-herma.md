@@ -23,7 +23,7 @@ The first time it opens, the app asks for:
 - **Room:** the room this tablet lives in, like Living room. Athena takes "turn off the lights" to mean this room.
 - **Talk key (optional):** tap **Set talk key** and press the side key (the Active Key on the Tab Active3). If nothing happens, Samsung is keeping that key for itself: in Android's Settings, under Advanced features > Active Key, set it to no app, then try again. A volume key works too.
 
-Long-press the room name on the main screen to come back to these settings.
+Tap **Settings** at the bottom of the main screen (or long-press the room name) to come back to these settings.
 
 ## Away from home
 

@@ -86,7 +86,7 @@ class MainActivity : Activity() {
             setOnLongClickListener { startActivity(Intent(this@MainActivity, SetupActivity::class.java)); true }
         }
         val hint = TextView(this).apply {
-            text = "Athena · hold the room name for settings"
+            text = "Athena"
             textSize = 14f
             setTextColor(0xFF9AA3B5.toInt())
             gravity = Gravity.CENTER
@@ -107,6 +107,15 @@ class MainActivity : Activity() {
         heardView = TextView(this).apply { textSize = 18f; setTextColor(0xFF9AA3B5.toInt()); gravity = Gravity.CENTER }
         replyView = TextView(this).apply { textSize = 24f; setTextColor(Color.WHITE); gravity = Gravity.CENTER }
 
+        val settings = TextView(this).apply {
+            text = "⚙  Settings"
+            textSize = 16f
+            setTextColor(0xFF9AA3B5.toInt())
+            gravity = Gravity.CENTER
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setOnClickListener { startActivity(Intent(this@MainActivity, SetupActivity::class.java)) }
+        }
+
         val size = dp(260)
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -119,6 +128,7 @@ class MainActivity : Activity() {
             addView(statusView)
             addView(heardView, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
             addView(replyView, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(settings, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(24) })
         }
         setContentView(column)
         show(State.READY)
