@@ -2,7 +2,7 @@
 
 Hermai ("HER-my", plural of herma): the herms Athenians set at the door of each house to watch over it. Here, each herma is a tablet on a room's wall, and together they make Athena the voice of the house.
 
-Each herma talks to Athena on Hermes, the same way a Petasos device does, and she controls the smart home through Home Assistant.
+Each herma talks to Athena on Hermes through Hermai's own backend, and she controls the smart home through Home Assistant. Hermai follows Petasos's design but is kept apart from it: its own plugin, devices, chats, settings and storage, so nothing crosses between the car and the house.
 
 ## Status
 
@@ -18,8 +18,8 @@ Phase 0, with the first code: the guard that keeps Athena's hands off locks, the
 | Piece | Where | State |
 | --- | --- | --- |
 | Tablets | Samsung Galaxy Tab Active3, Android 13, one per room, wall-mounted on chargers | Ready |
-| Android client | This repo, a Petasos client for Android | Phase 1 |
-| Voice turns, per-device chats | `hermes-petasos` plugin on Hermes | Exists; gains a shared-device note |
+| Android app | This repo, the Hermai app for the tablets | Phase 1 |
+| Voice turns, one chat per herma | This repo, the `hermai` plugin's backend (separate from Petasos) | Phase 1 |
 | Home Assistant tools | Official `homeassistant` plugin from the Hermes catalog | Phase 0 |
 | Permission guard | This repo, `hermai/`: a Hermes `pre_tool_call` hook in front of `ha_call_service` | Built; per-person settings in phase 3 |
 | Voice recognition | Voiceprints on Hermes (SpeechBrain ECAPA) | Phase 3 |
