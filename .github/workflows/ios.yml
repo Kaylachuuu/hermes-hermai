@@ -23,6 +23,7 @@ jobs:
       - run: xcodegen generate
       # Packages go in DerivedData/SourcePackages, where the WireGuardGoBridge target looks for them.
       - run: xcodebuild -resolvePackageDependencies -project Hermai.xcodeproj -scheme Hermai -derivedDataPath build/DerivedData
+      - run: ./patch-wireguardkit.sh build/DerivedData
       # A compile check without signing; signing and TestFlight come with Kayla's App Store Connect key.
       - run: >
           xcodebuild build -project Hermai.xcodeproj -scheme Hermai
