@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A herm's pillar under a speech wave: the Hermai mark, kept simple. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#1F2A44" android:pathData="M4,4h40v40h-40z" />
+    <path android:fillColor="#E8C46A" android:pathData="M20,18h8v22h-8z" />
+    <path android:fillColor="#E8C46A" android:pathData="M24,6a6,6 0,1 1,0 12a6,6 0,1 1,0 -12z" />
+    <path android:strokeColor="#E8C46A" android:strokeWidth="2.5" android:fillColor="#00000000"
+        android:pathData="M10,14q-3,6 0,12M38,14q3,6 0,12" />
+</vector>

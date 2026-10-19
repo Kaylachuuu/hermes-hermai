@@ -1,0 +1,19 @@
+name: Plugin tests
+
+on:
+  push:
+    paths: ["hermai/**", ".github/workflows/tests.yml"]
+  pull_request:
+    paths: ["hermai/**", ".github/workflows/tests.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Without Hermes installed, the tests that load the plugin into Hermes skip themselves.
+      - run: pip install pytest websockets
+      - run: python -m pytest -q hermai/tests

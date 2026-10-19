@@ -1,8 +1,11 @@
 """Hermai: Athena as the voice of the house, one tablet (herma) per room.
 
-For now this plugin holds the guard in front of Home Assistant (``guard.py``): before every
-``ha_call_service`` it refuses, or asks a human about, anything that would unlock, disarm or open.
-``/hermai`` shows the guard's settings.
+- ``guard.py`` stands in front of Home Assistant: before every ``ha_call_service`` it refuses, or
+  asks a human about, anything that would unlock, disarm or open. ``/hermai`` shows its settings.
+- ``dashboard/plugin_api.py`` is the backend the hermas talk to (``/api/plugins/hermai/``), with
+  ``voice.py`` running their turns with Athena and ``hermas.py`` keeping each tablet's room.
+- The ``pre_llm_call`` hook tells Athena, on each turn from a herma, which room she's speaking in
+  and that the tablet is shared.
 """
 from __future__ import annotations
 
@@ -11,24 +14,29 @@ import sys
 import threading
 from pathlib import Path
 
-_GUARD = "hermes_hermai_guard"
 _LOADING = threading.Lock()
 _SETTINGS = None
+_CHATS = None
 
 
-def _guard():
-    """guard.py, loaded once per process under a fixed name (as Petasos loads its modules)."""
-    module = sys.modules.get(_GUARD)
+def _load(name: str, filename: str):
+    """A module beside this file, loaded once per process under a fixed name (as Petasos loads its
+    modules), so the dashboard routes and these hooks share it."""
+    module = sys.modules.get(name)
     if module is not None:
         return module
     with _LOADING:
-        module = sys.modules.get(_GUARD)
+        module = sys.modules.get(name)
         if module is None:
-            spec = importlib.util.spec_from_file_location(_GUARD, Path(__file__).with_name("guard.py"))
+            spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            module = sys.modules.setdefault(_GUARD, module)
+            module = sys.modules.setdefault(name, module)
     return module
+
+
+def _guard():
+    return _load("hermes_hermai_guard", "guard.py")
 
 
 def _settings():
@@ -46,6 +54,25 @@ def _pre_tool_call(tool_name: str = "", args=None, tool_call_id: str = "", **_kw
         return _guard().verdict(tool_name, args, _settings(), call_id=tool_call_id)
     except Exception as e:  # Hermes skips a hook that raises, which would let the call through
         return {"action": "block", "message": f"Not allowed: Hermai's guard failed ({type(e).__name__}), so this wasn't run."}
+
+
+def _chats():
+    global _CHATS
+    if _CHATS is None:
+        from hermes_constants import get_hermes_home
+        _CHATS = _load("hermes_hermai_voice", "voice.py").Chats(Path(get_hermes_home()) / "hermai" / "chats.json")
+    return _CHATS
+
+
+def _pre_llm_call(session_id: str = "", parent_session_id: str = "", **_kwargs):
+    """On a turn in a herma's chat, the room and shared-tablet note; on any other chat, nothing."""
+    try:
+        room = _chats().room_of_session(session_id, parent_session_id)
+    except Exception:
+        return None
+    if room is None:
+        return None
+    return {"context": _load("hermes_hermai_hermas", "hermas.py").household_note(room)}
 
 
 def _slash(_args: str = "") -> str:
@@ -67,4 +94,5 @@ def _slash(_args: str = "") -> str:
 
 def register(ctx) -> None:
     ctx.register_hook("pre_tool_call", _pre_tool_call)
+    ctx.register_hook("pre_llm_call", _pre_llm_call)
     ctx.register_command("hermai", handler=_slash, description="Show what Hermai's guard allows")
