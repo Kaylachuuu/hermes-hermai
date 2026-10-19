@@ -21,12 +21,13 @@ jobs:
           go-version: "1.23"
       - run: brew install xcodegen
       - run: xcodegen generate
-      - run: xcodebuild -resolvePackageDependencies -project Hermai.xcodeproj -scheme Hermai -clonedSourcePackagesDirPath build/SourcePackages
+      # Packages go in DerivedData/SourcePackages, where the WireGuardGoBridge target looks for them.
+      - run: xcodebuild -resolvePackageDependencies -project Hermai.xcodeproj -scheme Hermai -derivedDataPath build/DerivedData
       # A compile check without signing; signing and TestFlight come with Kayla's App Store Connect key.
       - run: >
           xcodebuild build -project Hermai.xcodeproj -scheme Hermai
           -destination 'generic/platform=iOS' -configuration Debug
-          -clonedSourcePackagesDirPath build/SourcePackages -derivedDataPath build/DerivedData
+          -derivedDataPath build/DerivedData
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
           | tail -200
           ; exit ${PIPESTATUS[0]}
