@@ -11,8 +11,10 @@ android {
         applicationId = "dev.hermai.herma"
         minSdk = 26
         targetSdk = 33 // the Galaxy Tab Active3 stops at Android 13
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.2.0"
+        // sherpa-onnx ships native code for four kinds of processor; tablets and phones are ARM.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -34,4 +36,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+    // "Hey Athena": the sherpa-onnx library and its model come from ./fetch-wake-word.sh, not git.
+    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
 }

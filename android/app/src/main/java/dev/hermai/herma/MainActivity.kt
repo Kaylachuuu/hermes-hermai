@@ -6,7 +6,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,8 +22,9 @@ import android.widget.TextView
 import java.io.File
 import java.util.concurrent.Executors
 
-/** The herma's one screen: the room's name, a big button held to talk, and what Athena said. */
-class MainActivity : Activity() {
+/** The herma's one screen: the room's name, a big button held to talk, and what Athena said.
+ *  With "Hey Athena" on, it also listens for that, on the tablet, whenever it's ready. */
+class MainActivity : Activity(), WakeListener.Events {
     private lateinit var herma: Herma
     private lateinit var hermes: Hermes
     private val recorder = Recorder()
@@ -29,6 +32,8 @@ class MainActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private var player: MediaPlayer? = null
     private var state = State.READY
+    private lateinit var wake: WakeListener
+    private var paused = true
 
     private lateinit var roomView: TextView
     private lateinit var talk: Button
@@ -38,6 +43,7 @@ class MainActivity : Activity() {
 
     enum class State(val label: String, val colour: Int) {
         READY("Hold to talk", 0xFF1F2A44.toInt()),
+        WAITING("“Hey Athena”\nor hold to talk", 0xFF1F2A44.toInt()),
         LISTENING("Listening…", 0xFFB3412E.toInt()),
         THINKING("Thinking…", 0xFF6B5B95.toInt()),
         SPEAKING("Speaking · tap to stop", 0xFF2E7D5B.toInt()),
@@ -47,6 +53,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         herma = Herma(this)
         hermes = Hermes(herma)
+        wake = WakeListener(assets, this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // a wall tablet stays awake
         buildScreen()
     }
@@ -58,9 +65,11 @@ class MainActivity : Activity() {
             return
         }
         roomView.text = herma.room
+        paused = false
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
         }
+        if (state == State.READY || state == State.WAITING) show(State.READY)
         status("Connecting…")
         work.execute {
             try {
@@ -74,7 +83,49 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+        paused = true
+        wake.stop()
         if (state == State.LISTENING) { recorder.stop(); show(State.READY) }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (state == State.READY || state == State.WAITING) show(State.READY)
+    }
+
+    // --- "Hey Athena" ---
+
+    /** Listens for the wake word when this herma is idle, it's turned on and the mic is allowed. */
+    private fun listen() {
+        if (paused || !herma.wakeWord || !herma.ready || wake.listening) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        wake.start()
+    }
+
+    override fun onWake() {
+        main.post {
+            if (state == State.WAITING) { chime(); show(State.LISTENING); status("") }
+        }
+    }
+
+    override fun onUtterance(wav: ByteArray) {
+        main.post { send(wav, woke = true) }
+    }
+
+    override fun onNothingSaid() {
+        main.post { if (state == State.LISTENING && !recorder.recording) show(State.WAITING) }
+    }
+
+    override fun onProblem(message: String) {
+        main.post { status(message); show(State.READY, andListen = false) }
+    }
+
+    private fun chime() {
+        try {
+            val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70)
+            tone.startTone(ToneGenerator.TONE_PROP_ACK, 150)
+            main.postDelayed({ tone.release() }, 400)
+        } catch (e: RuntimeException) { /* no tone, still listening */ }
     }
 
     private fun buildScreen() {
@@ -152,12 +203,14 @@ class MainActivity : Activity() {
         when (state) {
             State.SPEAKING -> { stopSpeaking(); return }
             State.THINKING -> return
+            State.LISTENING -> return // already listening after "Hey Athena"
             else -> {}
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
             return
         }
+        wake.stop() // the talk button takes the microphone
         try {
             recorder.start()
             show(State.LISTENING)
@@ -168,13 +221,18 @@ class MainActivity : Activity() {
     }
 
     private fun release() {
-        if (state != State.LISTENING) return
+        if (state != State.LISTENING || !recorder.recording) return
         val wav = recorder.stop()
         if (wav == null) { show(State.READY); return }
+        send(wav, woke = false)
+    }
+
+    private fun send(wav: ByteArray, woke: Boolean) {
         show(State.THINKING)
         work.execute {
             try {
-                val r = hermes.voice(wav)
+                val r = hermes.voice(wav, woke)
+                if (r.ignored) { main.post { show(State.READY) }; return@execute }
                 val audio = r.audio?.let { hermes.audio(it) }
                 main.post {
                     heardView.text = if (r.heard.isEmpty()) "" else "“${r.heard}”"
@@ -212,10 +270,17 @@ class MainActivity : Activity() {
         if (state == State.SPEAKING) show(State.READY)
     }
 
-    private fun show(s: State) {
-        state = s
-        talk.text = s.label
-        talk.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(s.colour); setStroke(dp(3), 0xFFE8C46A.toInt()) }
+    /** Shows a state. READY becomes WAITING while "Hey Athena" is being listened for. */
+    private fun show(s: State, andListen: Boolean = true) {
+        var shown = s
+        if (s == State.READY && andListen) {
+            listen()
+            if (wake.listening) shown = State.WAITING
+        }
+        state = shown
+        talk.text = shown.label
+        talk.textSize = if (shown == State.WAITING) 22f else 26f
+        talk.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(shown.colour); setStroke(dp(3), 0xFFE8C46A.toInt()) }
     }
 
     private fun status(text: String) { statusView.text = text }
@@ -231,6 +296,7 @@ class MainActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        wake.release()
         player?.release()
         work.shutdownNow()
         super.onDestroy()

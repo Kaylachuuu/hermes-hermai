@@ -24,6 +24,7 @@ jobs:
           java-version: "17"
       # GitHub's Ubuntu runners come with the Android SDK; Gradle fetches any missing platform.
       - uses: gradle/actions/setup-gradle@v5
+      - run: ./fetch-wake-word.sh
       - run: ./gradlew --no-daemon assembleDebug
       - uses: actions/upload-artifact@v6
         with:

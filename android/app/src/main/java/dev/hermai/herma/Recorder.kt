@@ -14,6 +14,8 @@ class Recorder {
     private var thread: Thread? = null
     private val pcm = ByteArrayOutputStream()
 
+    val recording: Boolean get() = record != null
+
     @SuppressLint("MissingPermission") // asked for before the first recording
     fun start() {
         if (record != null) return

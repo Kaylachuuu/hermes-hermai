@@ -9,13 +9,14 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import java.util.concurrent.Executors
 
-/** Setting up a herma: where Hermes is, a dashboard sign-in, the room, and the talk key. */
+/** Setting up a herma: where Hermes is, a dashboard sign-in, the room, the talk key and "Hey Athena". */
 class SetupActivity : Activity() {
     private lateinit var herma: Herma
     private val work = Executors.newSingleThreadExecutor()
@@ -57,6 +58,13 @@ class SetupActivity : Activity() {
             setOnClickListener { capturing = false; herma.talkKey = 0; showKey() }
         }
         val keys = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; addView(setKey); addView(clearKey) }
+        val wakeWord = CheckBox(this).apply {
+            text = "Listen for “Hey Athena”"
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            isChecked = herma.wakeWord
+            setOnCheckedChangeListener { _, on -> herma.wakeWord = on }
+        }
 
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -71,6 +79,7 @@ class SetupActivity : Activity() {
             addView(label("Password")); addView(password)
             addView(label("Room")); addView(room)
             addView(label("Talk key (held like the on-screen button)")); addView(keyView); addView(keys)
+            addView(label("Wake word (heard on this tablet; nothing is sent until it's said)")); addView(wakeWord)
             addView(save, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
             addView(message)
         }

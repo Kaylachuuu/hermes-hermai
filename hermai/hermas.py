@@ -6,6 +6,7 @@ when its app starts, with the room set on the tablet; later the dashboard's Room
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from pathlib import Path
@@ -80,6 +81,26 @@ class Hermas:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         tmp.replace(self.path)
+
+
+WAKE_NAME = "athena"
+WAKE_LIKENESS = 0.82  # athina, atena, thena and athene pass; tina doesn't
+NOT_WAKE = frozenset({"athens"})
+_WORD = re.compile(r"[A-Za-z']+")
+_LEAD = " ,.!?:;-–—"
+
+
+def after_wake(heard: str) -> str | None:
+    """What was said after "Hey Athena" in a wake word's recording, or None when no "Athena" was
+    heard at all: the tablet's listener is lenient, so this is the check that it really was her name.
+    The recording starts a moment before the wake word, so anything before her name is dropped."""
+    import difflib
+    for m in _WORD.finditer(heard):
+        word = m.group().lower().removesuffix("'s")
+        if word not in NOT_WAKE and difflib.SequenceMatcher(None, word, WAKE_NAME).ratio() >= WAKE_LIKENESS:
+            rest = heard[m.end():].lstrip(_LEAD).strip()
+            return rest or "Hey Athena."
+    return None
 
 
 def _it_is(now: float | None) -> str:

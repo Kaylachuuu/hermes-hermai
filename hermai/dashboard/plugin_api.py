@@ -87,8 +87,10 @@ def hello(body: dict) -> dict:
 
 
 @router.post("/voice")
-async def voice(request: Request, herma: str = "") -> dict:
-    """A recording in (WAV body); what was heard, Athena's reply and an id for its audio out."""
+async def voice(request: Request, herma: str = "", wake: int = 0) -> dict:
+    """A recording in (WAV body); what was heard, Athena's reply and an id for its audio out.
+    ``wake=1`` when the tablet heard "Hey Athena": unless Hermai hears her name in it too, it was a
+    false start, and the answer is ``ignored`` with nothing said."""
     hid, room = _known(herma)
     audio = await request.body()
     if not audio:
@@ -109,11 +111,16 @@ async def voice(request: Request, herma: str = "") -> dict:
     if learning is not None:
         return await _learn(hid, heard, voiceprint, problem)
     if not heard:
-        return {"heard": "", "reply": "", "audio": None}
+        return {"heard": "", "reply": "", "audio": None, **({"ignored": True} if wake else {})}
+    text = heard
+    if wake:
+        text = _hermas_module().after_wake(heard)
+        if text is None:
+            return {"heard": heard, "reply": "", "audio": None, "ignored": True}
     speaker = None
     if listening:  # anyone the voices don't match is a guest
         speaker = (_voices().match(voiceprint)[0] if voiceprint else None) or ""
-    return {"heard": heard, **await _turn(heard, hid, room, speaker)}
+    return {"heard": heard, **await _turn(text, hid, room, speaker)}
 
 
 @router.post("/ask")

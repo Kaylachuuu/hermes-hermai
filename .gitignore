@@ -10,3 +10,6 @@ android/.idea/
 ios/Hermai.xcodeproj/
 ios/HermaiPersonal.xcodeproj/
 ios/build/
+android/app/libs/
+android/app/src/main/assets/kws/*.onnx
+android/app/src/main/assets/kws/tokens.txt

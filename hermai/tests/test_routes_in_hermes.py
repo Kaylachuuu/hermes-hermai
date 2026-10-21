@@ -392,3 +392,26 @@ def test_a_guests_chat_starts_afresh_after_a_while(hermes, hermas_hello, monkeyp
     asyncio.run(api._turn("hello", "kitchen-tab", "Kitchen", ""))
     asyncio.run(api._turn("again", "kitchen-tab", "Kitchen", ""))
     assert seen == [None, "s-new"]
+
+
+def test_a_wake_word_turn_is_checked_for_her_name(hermes, hermas_hello, monkeypatch):
+    client, _ = hermes
+    client.get("/api/plugins/hermai/status")
+    voice = sys.modules["hermes_hermai_voice"]
+    asked = []
+
+    async def fake_ask(text, herma, room, chats, url=None, **_kw):
+        asked.append(text)
+        return "Done."
+
+    heard = {b"RIFF-yes": "Hey Athena, lights off.", b"RIFF-no": "Hey Tina, come here."}
+    monkeypatch.setattr(voice, "transcribe", lambda audio: heard[audio])
+    monkeypatch.setattr(voice, "ask", fake_ask)
+    monkeypatch.setattr(voice, "speak", lambda text: b"RIFF")
+    r = client.post("/api/plugins/hermai/voice?herma=kitchen-tab&wake=1", content=b"RIFF-no").json()
+    assert r["ignored"] is True and r["reply"] == "" and asked == []
+    r = client.post("/api/plugins/hermai/voice?herma=kitchen-tab&wake=1", content=b"RIFF-yes").json()
+    assert r["heard"] == "Hey Athena, lights off." and r["reply"] == "Done." and "ignored" not in r
+    assert asked == ["lights off."]
+    client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-no")
+    assert asked[-1] == "Hey Tina, come here."  # the talk button needs no name
