@@ -95,12 +95,21 @@ HONEST = ("Only say you've done something to the house once the Home Assistant c
           "if no such device exists, or the call was refused, say so plainly.")
 
 
-def household_note(room: str, now: float | None = None) -> str:
-    """What Athena is told on every turn from a herma."""
+def household_note(room: str, now: float | None = None, speaker: str | None = None) -> str:
+    """What Athena is told on every turn from a herma. ``speaker`` is who the voice matched, "" for
+    no one (a guest), or None when no voices are learned and the herma can't tell."""
     where = f"the {room} herma" if room else "a herma"
-    return (f"[Hermai] {_it_is(now)} This message came through {where}, a shared tablet in the house. Anyone in the "
-            "household, or a guest, may be speaking, so don't assume it's Kayla; ask who's asking before "
-            "anything personal. Your reply is spoken aloud in the room: keep it short and plain, with no "
+    if speaker:
+        who = (f"By their voice, this is {speaker}. That's a good match, not proof, so if anything "
+               "they ask doesn't fit, check before sharing anything private.")
+    elif speaker == "":
+        who = ("Their voice didn't match anyone in the household, so treat them as a guest: nothing "
+               "is remembered from this chat, and don't share anyone's personal details.")
+    else:
+        who = ("Anyone in the household, or a guest, may be speaking, so don't assume it's Kayla; "
+               "ask who's asking before anything personal.")
+    return (f"[Hermai] {_it_is(now)} This message came through {where}, a shared tablet in the house. "
+            f"{who} Your reply is spoken aloud in the room: keep it short and plain, with no "
             "markdown or lists. When asked to control something without naming a room, it means this room. " + HONEST)
 
 

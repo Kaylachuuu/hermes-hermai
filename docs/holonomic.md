@@ -32,4 +32,4 @@ Needed before Hermai phase 3 (voice recognition). Phases 0 to 2 run single-speak
 ## Where stamping stands (2026-10-19)
 
 - **Phones: built.** A paired phone's turns go to Hermes' API server (`POST /api/sessions/{id}/chat`) with `author: {"id": "person:<id>", "name": ...}` from the phone's token (`voice.ask_as`). Someone other than Kayla can talk only when the API server has its key and `holonomic.json` lists them under `people` with `owner: "kayla"` (`people.memory_closed`). Kayla's own phone falls back to `/api/ws`, unlabelled, when the API server isn't set up.
-- **Tablets: not yet.** Herma turns still go over `/api/ws` with no author, so they open Kayla's store. They get `person:<id>` or `person:guest` once voiceprints are built; until then only Kayla should use them.
+- **Tablets: built.** Once a voice is learned and the API server is set up, every herma turn goes through the API server stamped `person:<id>` on a voiceprint match, else `person:guest`, each speaker in a chat of their own ([voices.md](voices.md)). With no voices learned they still go over `/api/ws` unlabelled, opening Kayla's store.
