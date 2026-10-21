@@ -13,6 +13,7 @@ Phase 1: the Hermai backend and the Android app for one herma, push-to-talk. Pha
 - **Phase 1:** get the app, sign in and talk: [docs/phase-1-herma.md](docs/phase-1-herma.md).
 - **Guard:** what it refuses and how to install it: [docs/guard.md](docs/guard.md).
 - **Memory per person:** what Hermai and holonomic agreed: [docs/holonomic.md](docs/holonomic.md).
+- **Voices:** teaching the hermas who's speaking: [docs/voices.md](docs/voices.md).
 
 ## The pieces
 
@@ -24,7 +25,7 @@ Phase 1: the Hermai backend and the Android app for one herma, push-to-talk. Pha
 | iPhone app | Face ID for locks, the alarm and the garage, and confirming what's asked at a herma | After phase 2 |
 | Home Assistant tools | Official `homeassistant` plugin from the Hermes catalog | Phase 0 |
 | Permission guard | This repo, `hermai/`: a Hermes `pre_tool_call` hook in front of `ha_call_service` | Built; per-person settings in phase 3 |
-| Voice recognition | Voiceprints on Hermes (SpeechBrain ECAPA) | Phase 3 |
+| Voice recognition | This repo, `hermai/voices.py`: voiceprints on Hermes (TitaNet small, sherpa-onnx) | Built |
 | Memory per person | `hermes-holonomic-memory` 0.34.0 | Built, awaiting merge |
 | Tone | Audio to Athena, or an "ears" model on the 16 GB V100 | Phase 4 |
 

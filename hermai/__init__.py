@@ -132,7 +132,11 @@ def _pre_llm_call(session_id: str = "", parent_session_id: str = "", **_kwargs):
         name = _load("hermes_hermai_people", "people.py").display_name(entry["person"])
         return {"context": notes.personal_note(name, entry.get("device") or "phone",
                                                        short=bool(entry.get("short")))}
-    return {"context": notes.household_note(str(entry.get("room") or ""))}
+    speaker = entry.get("speaker")
+    if isinstance(speaker, str) and speaker:
+        speaker = _load("hermes_hermai_people", "people.py").display_name(speaker)
+    return {"context": notes.household_note(str(entry.get("room") or ""),
+                                            speaker=speaker if isinstance(speaker, str) else None)}
 
 
 def _slash(args: str = "") -> str:
@@ -143,6 +147,8 @@ def _slash(args: str = "") -> str:
         return _phones(words[1:])
     if words and words[0] == "restricted":
         return _restricted(words[1:])
+    if words and words[0] == "voices":
+        return _voices_cmd(words[1:])
     return _guard_status()
 
 
@@ -181,6 +187,93 @@ def _restricted(words: list[str]) -> str:
         return (f"{name} may unlock, disarm and open the garage from their own paired phone, confirmed with "
                 "Face ID each time. Tablets and everything else still can't.")
     return f"{name} can't unlock, disarm or open the garage by voice, from any phone or tablet."
+
+
+def _voices():
+    from hermes_constants import get_hermes_home
+    return _load("hermes_hermai_voices", "voices.py").Voices(Path(get_hermes_home()) / "hermai" / "voices.json")
+
+
+def _herma_in(room_words: list[str]) -> tuple[str | None, str]:
+    """The herma in the room named, or the only herma when none is named: ``(id, room)``, or
+    ``(None, why not)``."""
+    from hermes_constants import get_hermes_home
+    hermas = _load("hermes_hermai_hermas", "hermas.py").Hermas(Path(get_hermes_home()) / "hermai" / "hermas.json").all()
+    rooms = {hid: str(h.get("room") or "") for hid, h in hermas.items()}
+    if not rooms:
+        return None, "No hermas have said hello yet; open the Hermai app on a tablet first."
+    wanted = " ".join(room_words).strip().lower()
+    found = [hid for hid, room in rooms.items() if room.lower() == wanted] if wanted else list(rooms)
+    if len(found) == 1:
+        return found[0], rooms[found[0]]
+    names = ", ".join(sorted(set(rooms.values())))
+    if wanted:
+        return None, f"No herma is in a room called {' '.join(room_words)}. The rooms are: {names}."
+    return None, f"Say which room's herma, like /hermai voices learn elliot Kitchen. The rooms are: {names}."
+
+
+def _quietly(fn) -> None:
+    try:
+        fn()
+    except Exception:
+        pass  # the herma tries again on its first recording, and says what went wrong
+
+
+def _voices_cmd(words: list[str]) -> str:
+    """Learning, listing and forgetting the voices the hermas know."""
+    people = _load("hermes_hermai_people", "people.py")
+    voices = _load("hermes_hermai_voices", "voices.py")
+    store = _voices()
+    usage = ("Usage: /hermai voices; /hermai voices learn <person> [room]; /hermai voices forget <person>; "
+             "/hermai voices stop [room]")
+    if not words:
+        known = store.people()
+        if not known:
+            return ("No voices learned yet, so the hermas can't tell who's speaking. "
+                    "/hermai voices learn <person> [room] teaches one.")
+        lines = ["Voices the hermas know: " + ", ".join(people.display_name(p) for p in sorted(known)) + ".",
+                 "Anyone else who speaks to a herma is a guest: nothing they say is remembered."]
+        if _load("hermes_hermai_voice", "voice.py").api_server() is None:
+            lines.append("But Hermes' API server isn't set up, so the hermas aren't using them yet (API_SERVER_KEY).")
+        return "\n".join(lines)
+    if words[0] == "learn" and len(words) >= 2:
+        person = people.person_id(words[1])
+        if not person or person == voices.GUEST:
+            return usage
+        hid, room = _herma_in(words[2:])
+        if hid is None:
+            return room
+        if not voices.engine_installed():
+            return (f"Hermes needs sherpa-onnx to learn voices. Run `hermes pm install --extra wake-sherpa`, "
+                    f"then /hermai voices learn {person} again.")
+        store.start_learning(hid, person)
+        name = people.display_name(person)
+        from hermes_constants import get_hermes_home
+        # Fetch the voice model now (about 40 MB, once), so the first recording doesn't wait for it.
+        embedder = voices.Embedder(Path(get_hermes_home()) / "cache" / "hermai")
+        threading.Thread(target=lambda: _quietly(embedder._model), daemon=True).start()
+        lines = [f"The {room} herma is ready to learn {name}'s voice. {name}, press talk and say anything you like, "
+                 f"a sentence or two each time, {voices.SAMPLES} times. The herma tells you how many are left; "
+                 f"none of it goes to Athena. It stops waiting in {voices.LEARN_TTL_S // 60} minutes."]
+        if store.people().get(person):
+            lines.append(f"Once it's done, this replaces the voice learned for {name} before.")
+        reason = people.memory_closed(Path(get_hermes_home()) / "holonomic.json", person)
+        if reason:
+            lines.append(f"Until that's fixed, the hermas will know it's {name} but open no memories for them: {reason}.")
+        return "\n".join(lines)
+    if words[0] == "forget" and len(words) == 2:
+        person = people.person_id(words[1])
+        if not person:
+            return usage
+        if store.forget(person):
+            return f"Forgot {people.display_name(person)}'s voice. To the hermas they're a guest now."
+        return f"No voice is learned for {people.display_name(person)}."
+    if words[0] == "stop":
+        hid, room = _herma_in(words[1:])
+        if hid is None:
+            return room
+        return f"The {room} herma stopped learning." if store.stop_learning(hid) else f"The {room} herma wasn't learning a voice."
+    return usage
 
 
 def _phones(words: list[str]) -> str:
@@ -223,7 +316,8 @@ def register(ctx) -> None:
     ctx.register_hook("pre_llm_call", _pre_llm_call)
     ctx.register_command("hermai", handler=_slash,
                          description="Hermai: the guard's settings; pair <person> to pair a phone; phones to list them; "
-                                     "restricted <person> on|off for Face ID unlocking from their phone")
+                                     "restricted <person> on|off for Face ID unlocking from their phone; "
+                                     "voices to learn who's speaking to the tablets")
     register_auth = getattr(ctx, "register_dashboard_auth_provider", None)
     if register_auth is None:
         return  # an older Hermes: phones can't pair, the tablets still work

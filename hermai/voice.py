@@ -132,10 +132,27 @@ class Chats:
                 data[herma] = {"session": session_id, "room": room, **(about or {})}
             else:
                 data.pop(herma, None)
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-            tmp.replace(self.path)
+            self._write(data)
+
+    def _write(self, data: dict) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(self.path)
+
+    def entry(self, herma: str) -> dict | None:
+        with self._lock:
+            entry = self._read().get(herma)
+            return dict(entry) if isinstance(entry, dict) else None
+
+    def touch(self, herma: str, **fields) -> None:
+        """Updates fields of a chat that's already kept, like when it was last used."""
+        with self._lock:
+            data = self._read()
+            if not isinstance(data.get(herma), dict):
+                return
+            data[herma].update(fields)
+            self._write(data)
 
     def room_of_session(self, *session_ids: str) -> str | None:
         """The room whose herma chat is one of these sessions, or None for any other chat."""

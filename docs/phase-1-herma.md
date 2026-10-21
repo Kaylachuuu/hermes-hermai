@@ -37,6 +37,6 @@ With WireGuard on, use the Hermes server's home address (`10.0.0.20:9119`). The 
 
 ## What's not here yet
 
-- Who's speaking. Every herma turn counts as a guest's until voice recognition (phase 3), so Athena won't bring up anyone's private memories.
+- Who's speaking: see [voices.md](voices.md). Until a voice is learned, herma turns open Kayla's memories, so only Kayla should use them.
 - Wake word (phase 2).
 - The tablet signs in as you. Herma-only sign-ins that can do nothing but talk come before the tablets go on the walls for good.

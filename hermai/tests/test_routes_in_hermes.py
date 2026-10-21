@@ -298,3 +298,97 @@ def test_face_id_lets_one_unlock_through_from_kaylas_phone(hermes, monkeypatch):
     # Turned off for Kayla, her phone gets the plain refusal.
     sys.modules["hermes_hermai_people"].shared(home / "hermai" / "people.json").set_may_secure("kayla", False)
     assert "Not allowed" in guard()[0]["message"]
+
+
+def test_a_herma_learns_a_voice_then_knows_who_is_speaking(hermes, hermas_hello, monkeypatch):
+    import json
+    from hermes_cli.lifecycle import invoke_hook
+    client, home = hermes
+    monkeypatch.setenv("API_SERVER_KEY", "k" * 40)
+    (home / "holonomic.json").write_text(json.dumps({"owner": "kayla", "people": {"elliot": {"remembered": True}}}))
+    client.get("/api/plugins/hermai/status")  # loads the modules
+    voice, voices = sys.modules["hermes_hermai_voice"], sys.modules["hermes_hermai_voices"]
+    unit = voices._unit
+    prints = {b"RIFF-elliot": unit([1, 0.1, 0]), b"RIFF-elliot2": unit([1, 0, 0.1]),
+              b"RIFF-stranger": unit([0, 0, 1]), b"RIFF-ty": unit([0, 1, 0])}
+    monkeypatch.setattr(voices.Embedder, "embed", lambda self, audio: prints.get(audio))
+    monkeypatch.setattr(voices.Embedder, "_model", lambda self: None)
+    monkeypatch.setattr(voices, "engine_installed", lambda: True)
+    monkeypatch.setattr(voice, "transcribe", lambda audio: "" if audio == b"RIFF-quiet" else "hello there")
+    monkeypatch.setattr(voice, "speak", lambda text: b"RIFF")
+    asked = []
+
+    def fake_ask_as(text, chat, chats, author, title, about=None, api=None):
+        chats.set(chat, f"s-{chat}", "", about)
+        asked.append({"chat": chat, "author": author, "title": title})
+        return "Hi."
+
+    async def no_ws(*_a, **_kw):
+        raise AssertionError("once voices are learned, herma turns are labelled")
+
+    try:
+        # Before any voice is learned, the herma's turns go the old way.
+        assert "voices" in client.get("/api/plugins/hermai/status").json()
+        hermai = next(m for name, m in sys.modules.items() if name.endswith("hermai") and hasattr(m, "_slash"))
+        out = hermai._slash("voices learn elliot kitchen")
+        assert "ready to learn Elliot's voice" in out
+        monkeypatch.setattr(voice, "ask_as", fake_ask_as)
+        monkeypatch.setattr(voice, "ask", no_ws)
+
+        r = client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-elliot").json()
+        assert r["reply"].startswith("Got it. 4 more") and r["audio"]
+        r = client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-ty").json()
+        assert "didn't sound like the same person" in r["reply"]
+        r = client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-short").json()
+        assert "a bit short" in r["reply"]
+        for _ in range(3):
+            client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-elliot2")
+        r = client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-elliot").json()
+        assert r["reply"] == "Thanks, Elliot. I'll know your voice now."
+        assert asked == []  # learning never reached Athena
+        assert "Elliot" in hermai._slash("voices")
+
+        r = client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-elliot2").json()
+        assert r["reply"] == "Hi."
+        assert asked[-1] == {"chat": "kitchen-tab~elliot", "author": {"id": "person:elliot", "name": "Elliot"},
+                             "title": "Hermai · Kitchen · Elliot"}
+        notes = [n for n in invoke_hook("pre_llm_call", session_id="s-kitchen-tab~elliot", parent_session_id="") if n]
+        assert "By their voice, this is Elliot" in notes[0]["context"]
+        guarded = [g for g in invoke_hook("pre_tool_call", tool_name="ha_call_service",
+                                          args={"domain": "lock", "service": "unlock", "entity_id": "lock.front_door"},
+                                          tool_call_id="c1", session_id="s-kitchen-tab~elliot") if g]
+        assert "Not allowed" in guarded[0]["message"]  # a voice never unlocks anything
+
+        client.post("/api/plugins/hermai/voice?herma=kitchen-tab", content=b"RIFF-stranger")
+        assert asked[-1]["chat"] == "kitchen-tab~guest"
+        assert asked[-1]["author"] == {"id": "person:guest", "name": "Guest"}
+        notes = [n for n in invoke_hook("pre_llm_call", session_id="s-kitchen-tab~guest", parent_session_id="") if n]
+        assert "treat them as a guest" in notes[0]["context"]
+        client.post("/api/plugins/hermai/ask?herma=kitchen-tab", json={"text": "typed"})
+        assert asked[-1]["chat"] == "kitchen-tab~guest"  # typing has no voice
+
+        assert "Forgot Elliot's voice" in hermai._slash("voices forget elliot")
+    finally:
+        (home / "holonomic.json").unlink()
+
+
+def test_a_guests_chat_starts_afresh_after_a_while(hermes, hermas_hello, monkeypatch):
+    client, home = hermes
+    client.get("/api/plugins/hermai/status")
+    voice = sys.modules["hermes_hermai_voice"]
+    api = next(m for name, m in sys.modules.items() if hasattr(m, "_turn") and hasattr(m, "GUEST_IDLE_S"))
+    chats = voice.Chats(home / "hermai" / "chats.json")
+    chats.set("kitchen-tab~guest", "s-old", "Kitchen", {"speaker": "", "last": 1})
+    seen = []
+
+    def fake_ask_as(text, chat, chats, author, title, about=None, api=None):
+        seen.append(chats.get(chat))
+        chats.set(chat, "s-new", "", about)
+        return "Hi."
+
+    monkeypatch.setattr(voice, "ask_as", fake_ask_as)
+    monkeypatch.setattr(voice, "speak", lambda text: b"RIFF")
+    import asyncio
+    asyncio.run(api._turn("hello", "kitchen-tab", "Kitchen", ""))
+    asyncio.run(api._turn("again", "kitchen-tab", "Kitchen", ""))
+    assert seen == [None, "s-new"]

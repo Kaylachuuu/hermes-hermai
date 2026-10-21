@@ -10,6 +10,7 @@ import importlib.util
 import json
 import sys
 import threading
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -95,32 +96,125 @@ async def voice(request: Request, herma: str = "") -> dict:
     if len(audio) > MAX_SPEECH_BYTES:
         raise HTTPException(status_code=413, detail="recording too long")
     v = _voice()
+    loop = asyncio.get_running_loop()
+    learning = _voices().learning(hid)
+    listening = learning is not None or _recognising()
+    hearing = loop.run_in_executor(None, v.transcribe, audio)
+    printing = loop.run_in_executor(None, _voiceprint, audio) if listening else None
     try:
-        heard = await asyncio.get_running_loop().run_in_executor(None, v.transcribe, audio)
+        heard = await hearing
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"couldn't transcribe: {exc}"[:300]) from None
+    voiceprint, problem = await printing if printing else (None, "")
+    if learning is not None:
+        return await _learn(hid, heard, voiceprint, problem)
     if not heard:
         return {"heard": "", "reply": "", "audio": None}
-    return {"heard": heard, **await _turn(heard, hid, room)}
+    speaker = None
+    if listening:  # anyone the voices don't match is a guest
+        speaker = (_voices().match(voiceprint)[0] if voiceprint else None) or ""
+    return {"heard": heard, **await _turn(heard, hid, room, speaker)}
 
 
 @router.post("/ask")
 async def ask(body: dict, herma: str = "") -> dict:
-    """Typed words in; Athena's reply and an id for its audio out."""
+    """Typed words in; Athena's reply and an id for its audio out. Typing has no voice, so once
+    voices are learned a typed turn is a guest's."""
     hid, room = _known(herma)
     text = body.get("text") if isinstance(body, dict) else None
     if not isinstance(text, str) or not text.strip():
         raise HTTPException(status_code=400, detail="text required")
-    return {"heard": text.strip(), **await _turn(text.strip(), hid, room)}
+    return {"heard": text.strip(), **await _turn(text.strip(), hid, room, "" if _recognising() else None)}
 
 
-async def _turn(text: str, herma: str, room: str) -> dict:
+GUEST_IDLE_S = 30 * 60  # a guest's chat on a herma starts afresh after this long unused
+
+
+async def _turn(text: str, herma: str, room: str, speaker: str | None = None) -> dict:
+    """One turn with Athena. ``speaker`` None is the herma's own unlabelled chat (no voices learned);
+    otherwise the turn is labelled with who is speaking, "" being a guest, each in a chat of their own."""
     v = _voice()
     _, chats, replies = _state()
     try:
-        return await v.turn(text, herma, room, chats, replies)
+        if speaker is None:
+            return await v.turn(text, herma, room, chats, replies)
+        voices, people = _voices_module(), _people_module()
+        who = speaker or voices.GUEST
+        name = people.display_name(speaker) if speaker else "Guest"
+        key = f"{herma}~{who}"
+        now = int(time.time())
+        kept = chats.entry(key)
+        if not speaker and kept and now - int(kept.get("last") or 0) > GUEST_IDLE_S:
+            chats.set(key, None, room)  # guests are never remembered, not even by their chat
+        about = {"room": room, "herma": herma, "speaker": speaker, "last": now}
+        result = await v.turn(text, key, room, chats, replies, title=f"{v.chat_title(room)} · {name}",
+                              about=about, author={"id": f"person:{who}", "name": name})
+        chats.touch(key, last=now)
+        return result
     except v.VoiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from None
+
+
+# --- voices ------------------------------------------------------------------------------------
+
+_EMBEDDER = None
+
+
+def _voices_module():
+    return _load("hermes_hermai_voices", "voices.py")
+
+
+def _voices():
+    from hermes_constants import get_hermes_home
+    return _voices_module().Voices(Path(get_hermes_home()) / "hermai" / "voices.json")
+
+
+def _embedder():
+    global _EMBEDDER
+    with _STATE_LOCK:
+        if _EMBEDDER is None:
+            from hermes_constants import get_hermes_home
+            _EMBEDDER = _voices_module().Embedder(Path(get_hermes_home()) / "cache" / "hermai")
+        return _EMBEDDER
+
+
+def _recognising() -> bool:
+    """Whether herma turns are labelled with who is speaking: once a voice is learned, and only
+    through the API server, the one way to label a turn."""
+    return bool(_voices().people()) and _voice().api_server() is not None
+
+
+def _voiceprint(audio: bytes) -> tuple[list | None, str]:
+    """The recording's voiceprint (None when it's too short to tell), and what went wrong if it
+    couldn't be made. Either way without one, the speaker is a guest."""
+    try:
+        return _embedder().embed(audio), ""
+    except Exception as exc:
+        import logging
+        logging.getLogger("hermai").warning("hermai: no voiceprint: %s", exc)
+        return None, str(exc)[:200]
+
+
+async def _learn(herma: str, heard: str, voiceprint, problem: str = "") -> dict:
+    """One recording while the herma is learning someone's voice: kept as a sample, and the herma
+    says how many more it needs. Nothing goes to Athena."""
+    voices = _voices_module()
+    learning = _voices().learning(herma) or {"person": "", "have": 0}
+    name = _people_module().display_name(learning["person"])
+    if problem:
+        outcome, left = "broken", 0
+    elif voiceprint is None:
+        outcome, left = "short", voices.SAMPLES - learning["have"]
+    else:
+        outcome, _person, left = _voices().add_sample(herma, voiceprint)
+    prompt = voices.learn_prompt(outcome, name, left) if not problem else \
+        f"I couldn't learn your voice: {problem}"
+    try:
+        speech = await asyncio.get_running_loop().run_in_executor(None, _voice().speak, prompt)
+        audio = _state()[2].put(speech)
+    except Exception:
+        audio = None
+    return {"heard": heard or "…", "reply": prompt, "audio": audio}
 
 
 @router.get("/voice/audio/{key}")
@@ -133,7 +227,7 @@ def voice_audio(key: str) -> Response:
 
 @router.get("/status")
 def status() -> dict:
-    return {"hermas": _state()[0].all()}
+    return {"hermas": _state()[0].all(), "voices": sorted(_voices().people())}
 
 
 # --- paired phones -------------------------------------------------------------------------------
@@ -287,7 +381,6 @@ def _phone_chat(device: dict) -> tuple[str, dict, str]:
 
 async def _phone_turn(text: str, device: dict) -> dict:
     """One turn from the phone; with ``confirm`` when the guard asked this phone for Face ID during it."""
-    import time
     started = time.time() - 1
     result = await _phone_turn_only(text, device)
     waiting = _waiting(device, started)

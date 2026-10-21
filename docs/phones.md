@@ -24,7 +24,7 @@ Kayla's phones always. Anyone else's phone talks once both of these are true, an
 
 Without both, what they said would land in Kayla's memories, and she might recall Kayla's to them.
 
-The tablets still send unlabelled turns, which open Kayla's memories, so only Kayla should use them until they know voices (see [holonomic.md](holonomic.md#where-stamping-stands-2026-10-19)).
+The tablets send unlabelled turns, which open Kayla's memories, until they've learned a voice; then they label each turn with who is speaking, or a guest ([voices.md](voices.md)).
 
 ## How it works
 
