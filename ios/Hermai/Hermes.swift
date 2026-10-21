@@ -28,6 +28,12 @@ struct Hermes {
         let person: String
         let name: String
         let may_talk: Bool
+        let why_not: String?  // why this phone can't talk yet, when it can't
+        let short: Bool?      // Short replies; missing from an older Hermai
+    }
+
+    struct Settings: Decodable {
+        let short: Bool
     }
 
     static func normalise(_ server: String) -> String {
@@ -46,6 +52,12 @@ struct Hermes {
 
     func hello() async throws -> Hello {
         try JSONDecoder().decode(Hello.self, from: try await call("POST", "/p/hello"))
+    }
+
+    func setShort(_ short: Bool) async throws -> Settings {
+        let body = try JSONSerialization.data(withJSONObject: ["short": short])
+        return try JSONDecoder().decode(Settings.self,
+                                        from: try await call("POST", "/p/settings", body: body, type: "application/json"))
     }
 
     func voice(wav: Data) async throws -> Reply {

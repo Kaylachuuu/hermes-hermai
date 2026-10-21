@@ -99,9 +99,12 @@ def household_note(room: str, now: float | None = None) -> str:
             "markdown or lists. When asked to control something without naming a room, it means this room.")
 
 
-def personal_note(person: str, device: str, now: float | None = None) -> str:
-    """What Athena is told on every turn from a paired phone."""
+def personal_note(person: str, device: str, now: float | None = None, short: bool = False) -> str:
+    """What Athena is told on every turn from a paired phone. ``short`` is the phone's Short replies
+    setting; otherwise she answers as fully as in a chat."""
+    length = ("keep it short and plain" if short else
+              "answer as fully as you would in a chat, but in plain spoken sentences")
     return (f"[Hermai] {_it_is(now)} This message came from {person}'s own phone "
             f"({device}), signed in to Hermai as {person}, so it's {person} speaking. They may be away from "
-            "the house. Your reply is spoken aloud: keep it short and plain, with no markdown or lists. "
-            "If they ask about a room without naming it, ask which one.")
+            f"the house. Your reply is read aloud to them, usually in earbuds: {length}, with no markdown, "
+            "lists or links. If they ask about a room without naming it, ask which one.")
