@@ -104,7 +104,10 @@ def _pair(words: list[str]) -> str:
         return "Usage: /hermai pair <person>, like /hermai pair kayla"
     code, _expires = _people().start_pairing(person)
     lines = [f"Pairing code for {people.display_name(person)}'s phone, good for 15 minutes and once only:", "", code, "",
-             "In the Hermai app, choose Pair this phone, enter the Hermes address and paste this code."]
+             "In the Hermai app, choose Pair this phone, enter the Hermes address and paste this code.", "",
+             # Relative, so it opens on whatever address this dashboard was reached at; that page makes a
+             # code of its own and shows it as a QR code with the address in it.
+             f"Or scan a QR code instead: [open the pairing page](/api/plugins/hermai/pair?person={person})"]
     if person != people.OWNER:
         from hermes_constants import get_hermes_home
         if _load("hermes_hermai_voice", "voice.py").api_server() is None:
