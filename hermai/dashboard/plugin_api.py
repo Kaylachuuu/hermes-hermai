@@ -212,14 +212,26 @@ def pair_claim(request: Request, body: dict) -> dict:
 def phone_hello(request: Request) -> dict:
     device = _phone(request)
     people = _people_module()
+    why = _why_not_talk(device["person"])
     return {"person": device["person"], "name": people.display_name(device["person"]), "device": device["name"],
-            "agent": "Athena", "may_talk": _why_not_talk(device["person"]) is None}
+            "agent": "Athena", "may_talk": why is None, "why_not": why, "short": device["short"]}
+
+
+@router.post("/p/settings")
+def phone_settings(request: Request, body: dict) -> dict:
+    """This phone's own settings: ``{"short": true}`` keeps Athena's spoken replies brief."""
+    _phone(request)
+    short = body.get("short") if isinstance(body, dict) else None
+    if not isinstance(short, bool):
+        raise HTTPException(status_code=400, detail="short is true or false")
+    _people().set_short(_bearer(request), short)
+    return {"short": short}
 
 
 def _phone_chat(device: dict) -> tuple[str, dict, str]:
     """The phone's chat key, what the turn note needs, and the chat's title."""
     name = _people_module().display_name(device["person"])
-    return (f"phone-{device['id']}", {"person": device["person"], "device": device["name"]},
+    return (f"phone-{device['id']}", {"person": device["person"], "device": device["name"], "short": device["short"]},
             f"Hermai · {name}'s {device['name']}")
 
 

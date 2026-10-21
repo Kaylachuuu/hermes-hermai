@@ -145,13 +145,23 @@ def test_a_phone_pairs_and_talks(hermes, monkeypatch):
     monkeypatch.setattr(voice, "speak", lambda text: b"RIFF-phone")
     r = client.post("/api/plugins/hermai/p/ask", json={"text": "hello"}, headers=phone)
     assert r.status_code == 200, r.text
-    assert seen["title"] == "Hermai · Kayla's iPhone" and seen["about"] == {"person": "kayla", "device": "iPhone"}
+    assert seen["title"] == "Hermai · Kayla's iPhone" and seen["about"] == {"person": "kayla", "device": "iPhone", "short": False}
     audio = client.get(f"/api/plugins/hermai/p/audio?key={r.json()['audio']}", headers=phone)
     assert audio.content == b"RIFF-phone"
 
     from hermes_cli.lifecycle import invoke_hook
     notes = [x for x in invoke_hook("pre_llm_call", session_id="s-phone", parent_session_id="") if x]
     assert "Kayla's own phone (iPhone)" in notes[0]["context"]
+    assert "as fully as you would in a chat" in notes[0]["context"]
+
+    # Short replies is this phone's own setting.
+    assert client.post("/api/plugins/hermai/p/settings", json={"short": "yes"}, headers=phone).status_code == 400
+    assert client.post("/api/plugins/hermai/p/settings", json={"short": True}, headers=phone).json() == {"short": True}
+    assert client.post("/api/plugins/hermai/p/hello", headers=phone).json()["short"] is True
+    client.post("/api/plugins/hermai/p/ask", json={"text": "again"}, headers=phone)
+    assert seen["about"]["short"] is True
+    notes = [x for x in invoke_hook("pre_llm_call", session_id="s-phone", parent_session_id="") if x]
+    assert "keep it short" in notes[0]["context"]
 
 
 def test_a_phone_token_opens_nothing_else(hermes):

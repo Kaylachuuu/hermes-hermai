@@ -9,6 +9,7 @@ final class AppModel: ObservableObject {
     @Published var paired = Store.token != nil && !Store.server.isEmpty
     @Published var personName = Store.personName
     @Published var mayTalk = true
+    @Published var shortReplies = false
     @Published var phase: Phase = .ready
     @Published var heard = ""
     @Published var reply = ""
@@ -70,7 +71,17 @@ final class AppModel: ObservableObject {
             let h = try await hermes.hello()
             personName = h.name
             mayTalk = h.may_talk
-            status = h.may_talk ? "" : "Athena can't keep your memories apart from Kayla's yet, so this phone can't talk to her until that's built."
+            shortReplies = h.short ?? false
+            status = h.may_talk ? "" : "This phone can't talk to Athena yet: \(h.why_not ?? "Hermes hasn't allowed it")."
+        } catch {
+            status = error.localizedDescription
+        }
+    }
+
+    /// The Short replies switch in Settings: Hermes keeps it for this phone.
+    func setShortReplies(_ short: Bool) async {
+        do {
+            shortReplies = try await hermes.setShort(short).short
         } catch {
             status = error.localizedDescription
         }

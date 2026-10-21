@@ -19,7 +19,7 @@ def test_a_code_pairs_one_phone_once(tmp_path):
     assert p.pairing_person(code) == "elliot"
     token, person, device_id = p.claim(code, "Elliot's  iPhone")
     assert token.startswith(people.TOKEN_PREFIX) and person == "elliot"
-    assert p.device(token) == {"id": device_id, "person": "elliot", "name": "Elliot's iPhone"}
+    assert p.device(token) == {"id": device_id, "person": "elliot", "name": "Elliot's iPhone", "short": False}
     assert p.claim(code, "again") is None and p.pairing_person(code) is None
 
 
@@ -72,3 +72,11 @@ def test_memory_is_apart_only_when_holonomic_knows_the_person(tmp_path):
     assert "isn't among" in people.memory_closed(cfg, "ty")
     cfg.write_text("{not json")
     assert "can't be read" in people.memory_closed(cfg, "elliot")
+
+
+def test_short_replies_is_kept_per_phone(tmp_path):
+    p = people.People(tmp_path / "people.json", clock=Clock())
+    token, _, _ = p.claim(p.start_pairing("kayla")[0], "iPhone")
+    assert p.device(token)["short"] is False
+    assert p.set_short(token, True) and p.device(token)["short"] is True
+    assert not p.set_short("hm1_nope", True)

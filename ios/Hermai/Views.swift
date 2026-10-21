@@ -144,6 +144,11 @@ struct SettingsView: View {
                     LabeledContent("Hermes", value: Store.server)
                     Button("Unpair", role: .destructive) { model.unpair(); dismiss() }
                 }
+                Section(footer: Text("Off: Athena answers as fully as she would in a chat. On: short, quick answers.")) {
+                    Toggle("Short replies", isOn: Binding(
+                        get: { model.shortReplies },
+                        set: { value in Task { await model.setShortReplies(value) } }))
+                }
                 Section("VPN") { VPNSection() }
             }
             .navigationTitle("Settings")

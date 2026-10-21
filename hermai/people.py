@@ -120,7 +120,7 @@ class People:
         return token, entry["person"], digest[:12]
 
     def device(self, token: str) -> dict | None:
-        """The paired phone a token belongs to: ``{"id", "person", "name"}``."""
+        """The paired phone a token belongs to: ``{"id", "person", "name", "short"}``."""
         if not isinstance(token, str) or not token.startswith(TOKEN_PREFIX):
             return None
         with self._lock:
@@ -132,7 +132,21 @@ class People:
             if self.clock() - entry.get("last_seen", 0) > 60:
                 entry["last_seen"] = int(self.clock())
                 self._write(data)
-            return {"id": key[:12], "person": entry.get("person"), "name": entry.get("name") or "Phone"}
+            return {"id": key[:12], "person": entry.get("person"), "name": entry.get("name") or "Phone",
+                    "short": bool(entry.get("short"))}
+
+    def set_short(self, token: str, short: bool) -> bool:
+        """Whether Athena keeps her replies to this phone brief (its Short replies setting)."""
+        if not isinstance(token, str) or not token.startswith(TOKEN_PREFIX):
+            return False
+        with self._lock:
+            data = self._read()
+            key = self._key(data["devices"], token)
+            if key is None:
+                return False
+            data["devices"][key]["short"] = bool(short)
+            self._write(data)
+            return True
 
     def devices(self) -> list[dict]:
         with self._lock:

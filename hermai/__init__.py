@@ -83,7 +83,8 @@ def _pre_llm_call(session_id: str = "", parent_session_id: str = "", **_kwargs):
     notes = _load("hermes_hermai_hermas", "hermas.py")
     if entry.get("person"):
         name = _load("hermes_hermai_people", "people.py").display_name(entry["person"])
-        return {"context": notes.personal_note(name, entry.get("device") or "phone")}
+        return {"context": notes.personal_note(name, entry.get("device") or "phone",
+                                                       short=bool(entry.get("short")))}
     return {"context": notes.household_note(str(entry.get("room") or ""))}
 
 
@@ -147,7 +148,7 @@ def _guard_status() -> str:
 
 # Routes a paired phone's token (or a pairing code, for the first) opens. Exact paths only: anything
 # else under /api/plugins/hermai/ still needs a dashboard sign-in.
-PERSON_ROUTES = ("/pair/claim", "/p/hello", "/p/voice", "/p/ask", "/p/audio")
+PERSON_ROUTES = ("/pair/claim", "/p/hello", "/p/settings", "/p/voice", "/p/ask", "/p/audio")
 
 
 def register(ctx) -> None:
