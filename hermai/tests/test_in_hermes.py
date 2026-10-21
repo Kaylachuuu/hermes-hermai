@@ -52,3 +52,13 @@ def test_approve_mode_asks(plugins):
         assert "cover.garage_door" in message
     finally:
         (home / "hermai" / "guard.json").unlink()
+
+
+def test_pair_command_links_to_the_qr_page(plugins):
+    import sys
+    out = sys.modules["hermai"]._slash("pair kayla") if "hermai" in sys.modules else None
+    if out is None:  # loaded under the plugin loader's own module name
+        mod = next(m for name, m in sys.modules.items() if name.endswith("hermai") and hasattr(m, "_slash"))
+        out = mod._slash("pair kayla")
+    assert "hp1_" in out
+    assert "(/api/plugins/hermai/pair?person=kayla)" in out
