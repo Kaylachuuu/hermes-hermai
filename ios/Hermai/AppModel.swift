@@ -10,6 +10,7 @@ final class AppModel: ObservableObject {
     @Published var personName = Store.personName
     @Published var mayTalk = true
     @Published var shortReplies = false
+    @Published var confirming: Hermes.Confirm?  // Athena is waiting for Face ID on this
     @Published var phase: Phase = .ready
     @Published var heard = ""
     @Published var reply = ""
@@ -60,6 +61,7 @@ final class AppModel: ObservableObject {
 
     func unpair() {
         Store.token = nil
+        FaceIDKey.delete()  // a new pairing registers a new key
         paired = false
         heard = ""
         reply = ""
@@ -72,6 +74,10 @@ final class AppModel: ObservableObject {
             personName = h.name
             mayTalk = h.may_talk
             shortReplies = h.short ?? false
+            if let face = h.face_id, face.allowed, !face.key {
+                // Registered once; making the key doesn't ask for Face ID, using it does.
+                if let key = try? FaceIDKey.publicKey() { try? await hermes.registerKey(key) }
+            }
             status = h.may_talk ? "" : "This phone can't talk to Athena yet: \(h.why_not ?? "Hermes hasn't allowed it")."
         } catch {
             status = error.localizedDescription
@@ -84,6 +90,44 @@ final class AppModel: ObservableObject {
             shortReplies = try await hermes.setShort(short).short
         } catch {
             status = error.localizedDescription
+        }
+    }
+
+    // MARK: Face ID
+
+    /// The Confirm with Face ID button: Face ID signs the request, and Athena goes ahead.
+    func confirm() {
+        guard let request = confirming else { return }
+        confirming = nil
+        phase = .thinking
+        Task {
+            do {
+                let reason = "Confirm: \(request.what)"
+                let signature = try await Task.detached { try FaceIDKey.sign(request.challenge, reason: reason) }.value
+                heard = ""
+                try await show(try await hermes.confirm(id: request.id, signature: signature))
+            } catch {
+                status = error.localizedDescription
+                phase = .ready
+            }
+        }
+    }
+
+    func cancelConfirm() {
+        confirming = nil
+        status = "Not confirmed, so nothing was done."
+    }
+
+    /// Athena's reply on screen and aloud, and any Face ID request that came with it.
+    private func show(_ r: Hermes.Reply) async throws {
+        reply = r.reply
+        if let e = r.speech_error { status = "Couldn't speak the reply: \(e)" }
+        confirming = r.confirm
+        if let key = r.audio {
+            try recorder.play(try await hermes.audio(key: key))
+            phase = .speaking
+        } else {
+            phase = .ready
         }
     }
 
@@ -126,15 +170,8 @@ final class AppModel: ObservableObject {
             do {
                 let r = try await hermes.voice(wav: wav)
                 heard = r.heard.isEmpty ? "" : "“\(r.heard)”"
-                reply = r.reply
                 if r.heard.isEmpty { status = "I didn't catch that." }
-                if let e = r.speech_error { status = "Couldn't speak the reply: \(e)" }
-                if let key = r.audio {
-                    try recorder.play(try await hermes.audio(key: key))
-                    phase = .speaking
-                } else {
-                    phase = .ready
-                }
+                try await show(r)
             } catch {
                 status = error.localizedDescription
                 phase = .ready

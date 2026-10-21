@@ -15,6 +15,18 @@ struct Hermes {
         let reply: String
         let audio: String?
         let speech_error: String?
+        let confirm: Confirm?  // the guard is asking this phone for Face ID
+    }
+
+    struct Confirm: Decodable, Identifiable {
+        let id: String
+        let what: String
+        let challenge: String
+    }
+
+    struct FaceID: Decodable {
+        let key: Bool
+        let allowed: Bool
     }
 
     struct Paired: Decodable {
@@ -30,6 +42,7 @@ struct Hermes {
         let may_talk: Bool
         let why_not: String?  // why this phone can't talk yet, when it can't
         let short: Bool?      // Short replies; missing from an older Hermai
+        let face_id: FaceID?  // missing from an older Hermai
     }
 
     struct Settings: Decodable {
@@ -58,6 +71,18 @@ struct Hermes {
         let body = try JSONSerialization.data(withJSONObject: ["short": short])
         return try JSONDecoder().decode(Settings.self,
                                         from: try await call("POST", "/p/settings", body: body, type: "application/json"))
+    }
+
+    func registerKey(_ publicKey: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["public_key": publicKey])
+        _ = try await call("POST", "/p/key", body: body, type: "application/json")
+    }
+
+    /// Face ID passed: the signed challenge goes back, and Athena goes ahead.
+    func confirm(id: String, signature: String) async throws -> Reply {
+        let body = try JSONSerialization.data(withJSONObject: ["id": id, "signature": signature])
+        return try JSONDecoder().decode(Reply.self, from: try await call("POST", "/p/confirm", body: body,
+                                                                         type: "application/json"))
     }
 
     func voice(wav: Data) async throws -> Reply {

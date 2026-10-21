@@ -132,8 +132,47 @@ class People:
             if self.clock() - entry.get("last_seen", 0) > 60:
                 entry["last_seen"] = int(self.clock())
                 self._write(data)
-            return {"id": key[:12], "person": entry.get("person"), "name": entry.get("name") or "Phone",
-                    "short": bool(entry.get("short"))}
+            return self._public(key, entry)
+
+    @staticmethod
+    def _public(key: str, entry: dict) -> dict:
+        return {"id": key[:12], "person": entry.get("person"), "name": entry.get("name") or "Phone",
+                "short": bool(entry.get("short")), "face_id_key": entry.get("face_id_key") or None}
+
+    def by_id(self, device_id: str) -> dict | None:
+        """A paired phone by its short id (as its chat is keyed), for the guard."""
+        with self._lock:
+            for key, entry in self._read()["devices"].items():
+                if key[:12] == device_id:
+                    return self._public(key, entry)
+        return None
+
+    def set_face_id_key(self, token: str, public_key: str) -> bool:
+        """Registers the phone's Face ID key (a P-256 public key from its Secure Enclave). Only once: a
+        stolen token can't swap in another key; to change it, unpair the phone and pair it again."""
+        if not isinstance(token, str) or not token.startswith(TOKEN_PREFIX):
+            return False
+        with self._lock:
+            data = self._read()
+            key = self._key(data["devices"], token)
+            if key is None or data["devices"][key].get("face_id_key"):
+                return False
+            data["devices"][key]["face_id_key"] = public_key
+            self._write(data)
+            return True
+
+    def may_secure(self, person: str) -> bool:
+        """Whether this person may unlock, disarm and open from their own phone with Face ID. The owner
+        may unless turned off; anyone else only once turned on (/hermai restricted <person> on)."""
+        with self._lock:
+            value = self._read()["persons"].get(person, {}).get("restricted")
+        return (person == OWNER) if value is None else bool(value)
+
+    def set_may_secure(self, person: str, allowed: bool) -> None:
+        with self._lock:
+            data = self._read()
+            data["persons"].setdefault(person, {})["restricted"] = bool(allowed)
+            self._write(data)
 
     def set_short(self, token: str, short: bool) -> bool:
         """Whether Athena keeps her replies to this phone brief (its Short replies setting)."""
@@ -183,7 +222,7 @@ class People:
             data = {}
         if not isinstance(data, dict):
             data = {}
-        for table in ("devices", "pairings"):
+        for table in ("devices", "pairings", "persons"):
             if not isinstance(data.get(table), dict):
                 data[table] = {}
         return data

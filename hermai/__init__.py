@@ -49,13 +49,60 @@ def _settings():
     return _SETTINGS
 
 
-def _pre_tool_call(tool_name: str = "", args=None, tool_call_id: str = "", **_kwargs):
+FACE_ID_ASKED = ("Waiting for Face ID: Hermai has asked {name}'s phone to confirm {what}, so it wasn't run yet. "
+                 "Tell {name} to confirm it on their phone. Once they do, you'll be told to go ahead; then make "
+                 "exactly this call again. Don't try any other way to do it.")
+
+
+ALLOW = "allow"  # _face_id's answer for a call the phone approved
+
+
+def _pre_tool_call(tool_name: str = "", args=None, tool_call_id: str = "", session_id: str = "", **_kwargs):
     if tool_name != "ha_call_service":
         return None
     try:
-        return _guard().verdict(tool_name, args, _settings(), call_id=tool_call_id)
+        verdict = _guard().verdict(tool_name, args, _settings(), call_id=tool_call_id)
+        if verdict is None:
+            return None
+        phone = _face_id(args, session_id)
+        if phone == ALLOW:
+            return None
+        return phone or verdict
     except Exception as e:  # Hermes skips a hook that raises, which would let the call through
         return {"action": "block", "message": f"Not allowed: Hermai's guard failed ({type(e).__name__}), so this wasn't run."}
+
+
+def _confirmations():
+    from hermes_constants import get_hermes_home
+    return _load("hermes_hermai_confirm", "confirm.py").Confirmations(Path(get_hermes_home()) / "hermai" / "confirm.json")
+
+
+def _face_id(args, session_id: str) -> dict | None:
+    """On a turn from a phone whose person may do this and which has a Face ID key: ALLOW when that
+    phone already approved exactly this call, else a block that asks the phone. None (the guard's own
+    answer stands) on any other turn."""
+    if not isinstance(args, dict) or not session_id:
+        return None
+    entry = _chats().entry_of_session(session_id)
+    chat = str((entry or {}).get("chat") or "")
+    if not chat.startswith("phone-") or not entry.get("person"):
+        return None
+    guard = _guard()
+    what = guard.check(args, _settings().current())
+    if what is None:
+        return None
+    people = _load("hermes_hermai_people", "people.py")
+    device = _people().by_id(chat[len("phone-"):])
+    if not device or device["person"] != entry["person"] or not device.get("face_id_key"):
+        return None
+    if not _people().may_secure(device["person"]):
+        return None
+    confirm = _load("hermes_hermai_confirm", "confirm.py")
+    key = confirm.call_key(args)
+    if _confirmations().take(session_id, key):
+        return ALLOW
+    _confirmations().request(session_id, device["id"], device["person"], key, what)
+    return {"action": "block", "message": FACE_ID_ASKED.format(name=people.display_name(device["person"]), what=what)}
 
 
 def _chats():
@@ -94,6 +141,8 @@ def _slash(args: str = "") -> str:
         return _pair(words[1:])
     if words and words[0] == "phones":
         return _phones(words[1:])
+    if words and words[0] == "restricted":
+        return _restricted(words[1:])
     return _guard_status()
 
 
@@ -117,6 +166,21 @@ def _pair(words: list[str]) -> str:
         if reason:
             lines.append(f"{people.display_name(person)}'s phone can pair, but can't talk to Athena yet: {reason}.")
     return "\n".join(lines)
+
+
+def _restricted(words: list[str]) -> str:
+    """Whether a person may unlock, disarm and open from their own phone, confirmed with Face ID."""
+    people = _load("hermes_hermai_people", "people.py")
+    person = people.person_id(words[0]) if words else None
+    if not person or len(words) > 2 or (len(words) == 2 and words[1] not in ("on", "off")):
+        return "Usage: /hermai restricted <person> [on|off], like /hermai restricted elliot on"
+    name = people.display_name(person)
+    if len(words) == 2:
+        _people().set_may_secure(person, words[1] == "on")
+    if _people().may_secure(person):
+        return (f"{name} may unlock, disarm and open the garage from their own paired phone, confirmed with "
+                "Face ID each time. Tablets and everything else still can't.")
+    return f"{name} can't unlock, disarm or open the garage by voice, from any phone or tablet."
 
 
 def _phones(words: list[str]) -> str:
@@ -151,14 +215,15 @@ def _guard_status() -> str:
 
 # Routes a paired phone's token (or a pairing code, for the first) opens. Exact paths only: anything
 # else under /api/plugins/hermai/ still needs a dashboard sign-in.
-PERSON_ROUTES = ("/pair/claim", "/p/hello", "/p/settings", "/p/voice", "/p/ask", "/p/audio")
+PERSON_ROUTES = ("/pair/claim", "/p/hello", "/p/settings", "/p/key", "/p/confirm", "/p/voice", "/p/ask", "/p/audio")
 
 
 def register(ctx) -> None:
     ctx.register_hook("pre_tool_call", _pre_tool_call)
     ctx.register_hook("pre_llm_call", _pre_llm_call)
     ctx.register_command("hermai", handler=_slash,
-                         description="Hermai: the guard's settings; pair <person> to pair a phone; phones to list them")
+                         description="Hermai: the guard's settings; pair <person> to pair a phone; phones to list them; "
+                                     "restricted <person> on|off for Face ID unlocking from their phone")
     register_auth = getattr(ctx, "register_dashboard_auth_provider", None)
     if register_auth is None:
         return  # an older Hermes: phones can't pair, the tablets still work

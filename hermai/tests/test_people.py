@@ -19,7 +19,7 @@ def test_a_code_pairs_one_phone_once(tmp_path):
     assert p.pairing_person(code) == "elliot"
     token, person, device_id = p.claim(code, "Elliot's  iPhone")
     assert token.startswith(people.TOKEN_PREFIX) and person == "elliot"
-    assert p.device(token) == {"id": device_id, "person": "elliot", "name": "Elliot's iPhone", "short": False}
+    assert p.device(token) == {"id": device_id, "person": "elliot", "name": "Elliot's iPhone", "short": False, "face_id_key": None}
     assert p.claim(code, "again") is None and p.pairing_person(code) is None
 
 

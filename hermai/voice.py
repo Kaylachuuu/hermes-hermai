@@ -147,9 +147,9 @@ class Chats:
         wanted = {s for s in session_ids if s}
         if not wanted:
             return None
-        for entry in self._read().values():
+        for chat, entry in self._read().items():
             if isinstance(entry, dict) and entry.get("session") in wanted:
-                return dict(entry)
+                return {**entry, "chat": chat}
         return None
 
     def _read(self) -> dict:

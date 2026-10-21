@@ -214,7 +214,57 @@ def phone_hello(request: Request) -> dict:
     people = _people_module()
     why = _why_not_talk(device["person"])
     return {"person": device["person"], "name": people.display_name(device["person"]), "device": device["name"],
-            "agent": "Athena", "may_talk": why is None, "why_not": why, "short": device["short"]}
+            "agent": "Athena", "may_talk": why is None, "why_not": why, "short": device["short"],
+            "face_id": {"key": bool(device["face_id_key"]), "allowed": _people().may_secure(device["person"])}}
+
+
+# --- Face ID for the locks, the alarm and the garage (see confirm.py) ------------------------------
+
+def _confirm_module():
+    return _load("hermes_hermai_confirm", "confirm.py")
+
+
+def _confirmations():
+    from hermes_constants import get_hermes_home
+    return _confirm_module().Confirmations(Path(get_hermes_home()) / "hermai" / "confirm.json")
+
+
+@router.post("/p/key")
+def phone_key(request: Request, body: dict) -> dict:
+    """The phone's Face ID key: a P-256 public key from its Secure Enclave, registered once."""
+    device = _phone(request)
+    key = body.get("public_key") if isinstance(body, dict) else None
+    if not _confirm_module().valid_public_key(key):
+        raise HTTPException(status_code=400, detail="public_key is a P-256 public key, base64")
+    if device["face_id_key"] == key:
+        return {"key": True}
+    if not _people().set_face_id_key(_bearer(request), key):
+        raise HTTPException(status_code=409, detail="this phone already has a Face ID key; unpair it and pair again to change it")
+    return {"key": True}
+
+
+@router.post("/p/confirm")
+async def phone_confirm(request: Request, body: dict) -> dict:
+    """Face ID passed on the phone: its signature over a request's challenge. Athena is then told to go ahead."""
+    device = _phone(request)
+    _may_talk(device)
+    rid = body.get("id") if isinstance(body, dict) else None
+    signature = body.get("signature") if isinstance(body, dict) else None
+    approved = _confirmations().approve(rid, device["id"], signature, device["face_id_key"])
+    if approved is None:
+        raise HTTPException(status_code=403, detail="That confirmation didn't check out or has expired; ask Athena again.")
+    name = _people_module().display_name(device["person"])
+    text = (f"[Hermai] {name} confirmed with Face ID on their phone. Go ahead with {approved['what']}, "
+            "making exactly the same call as before.")
+    return {"heard": "", **await _phone_turn(text, device)}
+
+
+def _waiting(device: dict, since: float) -> dict | None:
+    found = _confirmations().waiting_for(device["id"], since)
+    if not found:
+        return None
+    last = found[-1]
+    return {"id": last["id"], "what": last["what"], "challenge": last["challenge"]}
 
 
 @router.post("/p/settings")
@@ -236,6 +286,15 @@ def _phone_chat(device: dict) -> tuple[str, dict, str]:
 
 
 async def _phone_turn(text: str, device: dict) -> dict:
+    """One turn from the phone; with ``confirm`` when the guard asked this phone for Face ID during it."""
+    import time
+    started = time.time() - 1
+    result = await _phone_turn_only(text, device)
+    waiting = _waiting(device, started)
+    return {**result, "confirm": waiting} if waiting else result
+
+
+async def _phone_turn_only(text: str, device: dict) -> dict:
     v = _voice()
     _, chats, replies = _state()
     key, about, title = _phone_chat(device)
