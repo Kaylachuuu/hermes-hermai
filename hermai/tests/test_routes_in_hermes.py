@@ -223,3 +223,4 @@ def test_pairing_page_needs_the_dashboard_sign_in(hermes):
     assert client.get("/api/plugins/hermai/pair?person=kayla", headers={"Authorization": ""}).status_code == 401
     page = client.get("/api/plugins/hermai/pair?person=kayla")
     assert page.status_code == 200 and "hp1_" in page.text
+    assert "QRCode" in page.text or "<svg" in page.text  # drawn by the page without the qrcode package

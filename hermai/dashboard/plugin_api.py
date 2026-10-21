@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 import threading
 from pathlib import Path
@@ -291,7 +292,11 @@ def pair_page(request: Request, person: str = "") -> Response:
         img = qrcode.make(link, image_factory=qrcode.image.svg.SvgPathImage, box_size=12)
         qr = img.to_string(encoding="unicode")
     except Exception:
-        qr = "<p>(QR codes need the qrcode package on Hermes; use the code below.)</p>"
+        # Without the qrcode package, the page draws the code itself (qrcodejs, kept beside this file).
+        text = json.dumps(link).replace("<", "\\u003c")  # nothing in it can close the script
+        script = (Path(__file__).parent / "vendor" / "qrcode.min.js").read_text(encoding="utf-8")
+        qr = (f"<div id=qr></div><script>{script}</script><script>new QRCode(document.getElementById('qr'), "
+              f"{{text: {text}, width: 320, height: 320, correctLevel: QRCode.CorrectLevel.M}});</script>")
     who = html.escape(people.display_name(pid))
     reason = _why_not_talk(pid)
     note = "" if reason is None else f"<p>{who}'s phone can pair now, but can't talk to Athena yet: {html.escape(reason)}.</p>"
