@@ -151,6 +151,11 @@ def test_the_household_note_names_the_room():
     assert "Kitchen herma" in note and "don't assume it's Kayla" in note
 
 
+def test_the_notes_say_not_to_claim_what_wasnt_done():
+    for note in (hermas.household_note("Kitchen"), hermas.personal_note("Kayla", "iPhone")):
+        assert "once the Home Assistant call for it has succeeded" in note
+
+
 def test_the_household_note_gives_the_time(monkeypatch):
     monkeypatch.setenv("TZ", "America/Denver")
     import time

@@ -90,13 +90,18 @@ def _it_is(now: float | None) -> str:
     return f"It is {clock}{' ' + zone if zone else ''}."
 
 
+# Athena once told Kayla she was unlocking a door the house doesn't have.
+HONEST = ("Only say you've done something to the house once the Home Assistant call for it has succeeded; "
+          "if no such device exists, or the call was refused, say so plainly.")
+
+
 def household_note(room: str, now: float | None = None) -> str:
     """What Athena is told on every turn from a herma."""
     where = f"the {room} herma" if room else "a herma"
     return (f"[Hermai] {_it_is(now)} This message came through {where}, a shared tablet in the house. Anyone in the "
             "household, or a guest, may be speaking, so don't assume it's Kayla; ask who's asking before "
             "anything personal. Your reply is spoken aloud in the room: keep it short and plain, with no "
-            "markdown or lists. When asked to control something without naming a room, it means this room.")
+            "markdown or lists. When asked to control something without naming a room, it means this room. " + HONEST)
 
 
 def personal_note(person: str, device: str, now: float | None = None, short: bool = False) -> str:
@@ -107,4 +112,4 @@ def personal_note(person: str, device: str, now: float | None = None, short: boo
     return (f"[Hermai] {_it_is(now)} This message came from {person}'s own phone "
             f"({device}), signed in to Hermai as {person}, so it's {person} speaking. They may be away from "
             f"the house. Your reply is read aloud to them, usually in earbuds: {length}, with no markdown, "
-            "lists or links. If they ask about a room without naming it, ask which one.")
+            "lists or links. If they ask about a room without naming it, ask which one. " + HONEST)
