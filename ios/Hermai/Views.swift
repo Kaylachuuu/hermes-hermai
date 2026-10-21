@@ -46,6 +46,14 @@ struct TalkView: View {
         .padding(24)
         .task { await model.hello() }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(model) }
+        .alert("Athena is asking", isPresented: Binding(get: { model.confirming != nil },
+                                                        set: { if !$0 && model.confirming != nil { model.cancelConfirm() } }),
+               presenting: model.confirming) { _ in
+            Button("Confirm with Face ID") { model.confirm() }
+            Button("Cancel", role: .cancel) { model.cancelConfirm() }
+        } message: { request in
+            Text("Confirm with Face ID to let her do this: \(request.what)")
+        }
     }
 }
 

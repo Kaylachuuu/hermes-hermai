@@ -234,3 +234,67 @@ def test_pairing_page_needs_the_dashboard_sign_in(hermes):
     page = client.get("/api/plugins/hermai/pair?person=kayla")
     assert page.status_code == 200 and "hp1_" in page.text
     assert "QRCode" in page.text or "<svg" in page.text  # drawn by the page without the qrcode package
+
+
+def test_face_id_lets_one_unlock_through_from_kaylas_phone(hermes, monkeypatch):
+    import base64
+    ec = pytest.importorskip("cryptography.hazmat.primitives.asymmetric.ec")
+    from cryptography.hazmat.primitives import hashes, serialization
+    from hermes_cli.lifecycle import invoke_hook
+    client, home = hermes
+    monkeypatch.delenv("API_SERVER_KEY", raising=False)
+    code = _pair(client, home, "kayla")
+    token = client.post("/api/plugins/hermai/pair/claim", json={"device": "Face"},
+                        headers={"Authorization": f"Bearer {code}"}).json()["token"]
+    phone = {"Authorization": f"Bearer {token}"}
+    unlock = {"domain": "lock", "service": "unlock", "entity_id": "lock.front_door"}
+
+    def guard(session="s-face"):
+        return [r for r in invoke_hook("pre_tool_call", tool_name="ha_call_service", args=dict(unlock),
+                                       tool_call_id="c1", session_id=session) if r]
+
+    client.get("/api/plugins/hermai/status")  # loads the voice module
+    voice = sys.modules["hermes_hermai_voice"]
+    asked = []
+
+    async def fake_ask(text, herma, room, chats, url=None, title=None, about=None):
+        chats.set(herma, "s-face", room, about)
+        asked.append((text, guard()))
+        return "One moment."
+
+    monkeypatch.setattr(voice, "ask", fake_ask)
+    monkeypatch.setattr(voice, "speak", lambda text: b"RIFF")
+
+    # Without a Face ID key the guard refuses as always.
+    r = client.post("/api/plugins/hermai/p/ask", json={"text": "unlock the front door"}, headers=phone).json()
+    assert "confirm" not in r and "Not allowed" in asked[-1][1][0]["message"]
+
+    private = ec.generate_private_key(ec.SECP256R1())
+    public = base64.b64encode(private.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)).decode()
+    assert client.post("/api/plugins/hermai/p/key", json={"public_key": public}, headers=phone).json() == {"key": True}
+    assert client.post("/api/plugins/hermai/p/hello", headers=phone).json()["face_id"] == {"key": True, "allowed": True}
+    other = base64.b64encode(ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)).decode()
+    assert client.post("/api/plugins/hermai/p/key", json={"public_key": other}, headers=phone).status_code == 409
+
+    r = client.post("/api/plugins/hermai/p/ask", json={"text": "unlock the front door"}, headers=phone).json()
+    assert "Waiting for Face ID" in asked[-1][1][0]["message"]
+    req = r["confirm"]
+    assert req["what"] == "lock.unlock on lock.front_door"
+
+    bad = base64.b64encode(private.sign(b"not the challenge", ec.ECDSA(hashes.SHA256()))).decode()
+    assert client.post("/api/plugins/hermai/p/confirm", json={"id": req["id"], "signature": bad},
+                       headers=phone).status_code == 403
+
+    good = base64.b64encode(private.sign(req["challenge"].encode(), ec.ECDSA(hashes.SHA256()))).decode()
+    r = client.post("/api/plugins/hermai/p/confirm", json={"id": req["id"], "signature": good}, headers=phone)
+    assert r.status_code == 200, r.text
+    text, verdicts = asked[-1]
+    assert "confirmed with Face ID" in text and verdicts == []  # let through, once
+    assert "Not allowed" in guard()[0]["message"] or "Waiting" in guard()[0]["message"]  # and not again
+    assert "Not allowed" in guard("s-elsewhere")[0]["message"]  # other chats: the guard as always
+
+    # Turned off for Kayla, her phone gets the plain refusal.
+    sys.modules["hermes_hermai_people"].shared(home / "hermai" / "people.json").set_may_secure("kayla", False)
+    assert "Not allowed" in guard()[0]["message"]

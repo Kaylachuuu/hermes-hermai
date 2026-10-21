@@ -211,7 +211,7 @@ def test_a_labelled_turn_carries_its_author_and_keeps_its_chat(tmp_path):
         assert reply == "Hi Elliot."
         assert api.calls[0] == ("/api/sessions", "Bearer key", {"title": "Hermai · Elliot's Pixel", "source": "hermai"})
         assert api.calls[1][2] == {"message": "hello", "author": author}
-        assert chats.entry_of_session("s1") == {"session": "s1", "room": "", **about}
+        assert chats.entry_of_session("s1") == {"session": "s1", "room": "", **about, "chat": "phone-abc"}
         voice.ask_as("again", "phone-abc", chats, author, "t", about, api=(api.base, "key"))
         assert [c[0] for c in api.calls[2:]] == ["/api/sessions/s1/chat"]  # resumed, not reopened
         api.sessions.clear()  # deleted in the WebUI
