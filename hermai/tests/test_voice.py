@@ -233,3 +233,16 @@ def test_no_api_server_key_means_no_labelled_turns(monkeypatch):
     monkeypatch.setenv("API_SERVER_HOST", "0.0.0.0")
     monkeypatch.setenv("API_SERVER_PORT", "9000")
     assert voice.api_server() == ("http://127.0.0.1:9000", "abc")
+
+
+def test_a_wake_word_turn_keeps_what_came_after_her_name():
+    assert hermas.after_wake("Hey Athena, turn off the lights.") == "turn off the lights."
+    assert hermas.after_wake("…for dinner. Hey Athina what time is it") == "what time is it"
+    assert hermas.after_wake("hey a thena set a timer") == "set a timer"
+    assert hermas.after_wake("Hey Athena.") == "Hey Athena."
+
+
+def test_a_wake_word_turn_without_her_name_was_a_false_start():
+    assert hermas.after_wake("Hey Tina, come here") is None
+    assert hermas.after_wake("I loved Athens in the spring") is None
+    assert hermas.after_wake("turn off the lights") is None

@@ -16,7 +16,9 @@ class HermesError(message: String) : IOException(message)
  */
 class Hermes(private val herma: Herma) {
 
-    class Reply(val heard: String, val reply: String, val audio: String?, val speechError: String?)
+    /** `ignored` when Hermai heard no "Athena" in a wake word's recording: a false start, nothing to say. */
+    class Reply(val heard: String, val reply: String, val audio: String?, val speechError: String?,
+                val ignored: Boolean = false)
 
     /** Signs in with a dashboard username and password and keeps the renewable tokens. */
     fun signIn(server: String, username: String, password: String) {
@@ -62,8 +64,10 @@ class Hermes(private val herma: Herma) {
         return JSONObject(call("POST", "/hello", body.toString().toByteArray(), "application/json").decodeToString())
     }
 
-    /** One spoken turn: a WAV recording in, what was heard and Athena's reply out. */
-    fun voice(wav: ByteArray): Reply = reply(call("POST", "/voice?herma=${enc(herma.id)}", wav, "audio/wav"))
+    /** One spoken turn: a WAV recording in, what was heard and Athena's reply out. `wake` when it
+     *  started with "Hey Athena" rather than the talk button. */
+    fun voice(wav: ByteArray, wake: Boolean = false): Reply =
+        reply(call("POST", "/voice?herma=${enc(herma.id)}${if (wake) "&wake=1" else ""}", wav, "audio/wav"))
 
     /** One typed turn. */
     fun ask(text: String): Reply {
@@ -78,7 +82,8 @@ class Hermes(private val herma: Herma) {
         val j = JSONObject(raw.decodeToString())
         return Reply(j.optString("heard"), j.optString("reply"),
             if (j.isNull("audio")) null else j.optString("audio"),
-            if (j.has("speech_error")) j.optString("speech_error") else null)
+            if (j.has("speech_error")) j.optString("speech_error") else null,
+            j.optBoolean("ignored"))
     }
 
     /** A Hermai route, renewing the sign-in once if it has lapsed. */

@@ -20,7 +20,7 @@ Phase 1: the Hermai backend and the Android app for one herma, push-to-talk. Pha
 | Piece | Where | State |
 | --- | --- | --- |
 | Tablets | Samsung Galaxy Tab Active3, Android 13, one per room, wall-mounted on chargers | Ready |
-| Android app | This repo, `android/`: the Hermai app for the tablets, built on GitHub Actions | Phase 1, first version |
+| Android app | This repo, `android/`: the Hermai app for the tablets, built on GitHub Actions; push-to-talk and "Hey Athena" | Phase 2 |
 | Voice turns, one chat per herma | This repo, the `hermai` plugin's routes at `/api/plugins/hermai/` (separate from Petasos) | Phase 1, first version |
 | iPhone app | Face ID for locks, the alarm and the garage, and confirming what's asked at a herma | After phase 2 |
 | Home Assistant tools | Official `homeassistant` plugin from the Hermes catalog | Phase 0 |
@@ -51,4 +51,4 @@ python -m pytest hermai/tests
 
 `test_in_hermes.py` and `test_routes_in_hermes.py` load the plugin into a real Hermes and are skipped when Hermes isn't installed.
 
-The Android app builds on GitHub Actions (`.github/workflows/android.yml`); locally, `cd android && ./gradlew assembleDebug` with the Android SDK installed.
+The Android app builds on GitHub Actions (`.github/workflows/android.yml`); locally, `cd android && ./fetch-wake-word.sh && ./gradlew assembleDebug` with the Android SDK installed.

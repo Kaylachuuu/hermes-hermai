@@ -25,6 +25,18 @@ The first time it opens, the app asks for:
 
 Tap **Settings** at the bottom of the main screen (or long-press the room name) to come back to these settings.
 
+## "Hey Athena"
+
+The app listens for "Hey Athena" as well as the talk button. The tablet does the listening itself, with a small keyword model (sherpa-onnx), and sends nothing until it hears it. Then it chimes, records until you stop talking, and sends that, starting a moment before "Hey Athena".
+
+The tablet's listener is lenient, so it sometimes wakes on something else. Hermai checks each wake by listening for "Athena" in the recording itself. Without her name it's a false start: the tablet quietly goes back to listening, and nothing reaches Athena. What you said before her name is dropped too.
+
+Turn it off for one tablet in Settings with **Listen for "Hey Athena"**. The button still works either way.
+
+If it rarely hears you, or wakes too often, tell Claude in the Hermai project: the listener's sensitivity is two numbers in `WakeListener.kt`.
+
+Building locally needs the wake word files, which aren't kept in git: run `android/fetch-wake-word.sh` once before `./gradlew assembleDebug`. The GitHub build does this itself.
+
 ## Away from home
 
 With WireGuard on, use the Hermes server's home address (`10.0.0.20:9119`). The peer needs `AllowedIPs` that cover the home network.
@@ -38,5 +50,4 @@ With WireGuard on, use the Hermes server's home address (`10.0.0.20:9119`). The 
 ## What's not here yet
 
 - Who's speaking: see [voices.md](voices.md). Until a voice is learned, herma turns open Kayla's memories, so only Kayla should use them.
-- Wake word (phase 2).
 - The tablet signs in as you. Herma-only sign-ins that can do nothing but talk come before the tablets go on the walls for good.
