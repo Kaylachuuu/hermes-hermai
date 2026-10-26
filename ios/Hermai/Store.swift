@@ -17,6 +17,12 @@ enum Store {
         set { defaults.set(newValue, forKey: "personName") }
     }
 
+    /// Whether what was heard is shown with Athena's note on how it was said (off unless switched on).
+    static var showTone: Bool {
+        get { defaults.bool(forKey: "showTone") }
+        set { defaults.set(newValue, forKey: "showTone") }
+    }
+
     static var token: String? {
         get {
             var query = baseQuery

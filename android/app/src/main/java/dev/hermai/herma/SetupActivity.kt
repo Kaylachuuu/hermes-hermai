@@ -65,6 +65,13 @@ class SetupActivity : Activity() {
             isChecked = herma.wakeWord
             setOnCheckedChangeListener { _, on -> herma.wakeWord = on }
         }
+        val showTone = CheckBox(this).apply {
+            text = "Show how it was said"
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            isChecked = herma.showTone
+            setOnCheckedChangeListener { _, on -> herma.showTone = on }
+        }
 
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -80,6 +87,7 @@ class SetupActivity : Activity() {
             addView(label("Room")); addView(room)
             addView(label("Talk key (held like the on-screen button)")); addView(keyView); addView(keys)
             addView(label("Wake word (heard on this tablet; nothing is sent until it's said)")); addView(wakeWord)
+            addView(label("Transcript (Athena's note on how you said it, for checking her hearing)")); addView(showTone)
             addView(save, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
             addView(message)
         }

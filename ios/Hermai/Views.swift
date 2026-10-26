@@ -143,6 +143,7 @@ struct PairView: View {
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("showTone") private var showTone = false
 
     var body: some View {
         NavigationView {
@@ -156,6 +157,9 @@ struct SettingsView: View {
                     Toggle("Short replies", isOn: Binding(
                         get: { model.shortReplies },
                         set: { value in Task { await model.setShortReplies(value) } }))
+                }
+                Section(footer: Text("Shows Athena's note on how you said it under your words, as she gets it. Useful for checking her hearing.")) {
+                    Toggle("Show how it was said", isOn: $showTone)
                 }
                 Section("VPN") { VPNSection() }
             }

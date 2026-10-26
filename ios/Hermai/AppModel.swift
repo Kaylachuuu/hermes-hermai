@@ -161,15 +161,16 @@ final class AppModel: ObservableObject {
 
     func release() {
         guard phase == .listening else { return }
-        guard let wav = recorder.stop() else {
-            phase = .ready
-            return
-        }
         phase = .thinking
         Task {
+            guard let wav = await recorder.stop() else {
+                phase = .ready
+                return
+            }
             do {
                 let r = try await hermes.voice(wav: wav)
-                heard = r.heard.isEmpty ? "" : "“\(r.heard)”"
+                let words = AppModel.shown(r.heard, tone: Store.showTone)
+                heard = words.isEmpty ? "" : "“\(words)”"
                 if r.heard.isEmpty { status = "I didn't catch that." }
                 try await show(r)
             } catch {
@@ -177,5 +178,14 @@ final class AppModel: ObservableObject {
                 phase = .ready
             }
         }
+    }
+
+    /// What was heard, without the "[How it was said: …]" line Athena's own hearing adds for her,
+    /// unless Settings shows it.
+    nonisolated static func shown(_ heard: String, tone: Bool) -> String {
+        if tone { return heard }
+        guard let line = heard.range(of: #"\s*\[How it was said:[^\]]*\]\s*$"#, options: .regularExpression)
+        else { return heard }
+        return String(heard[..<line.lowerBound])
     }
 }
