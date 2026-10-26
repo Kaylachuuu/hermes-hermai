@@ -37,6 +37,11 @@ class Herma(context: Context) {
         get() = prefs.getBoolean("wake_word", true)
         set(v) = prefs.edit().putBoolean("wake_word", v).apply()
 
+    /** Whether what was heard is shown with Athena's note on how it was said. */
+    var showTone: Boolean
+        get() = prefs.getBoolean("show_tone", false)
+        set(v) = prefs.edit().putBoolean("show_tone", v).apply()
+
     /** This tablet's id with Hermai, made once and kept. */
     val id: String
         get() = prefs.getString("id", null) ?: ("herma-" + UUID.randomUUID().toString().take(8)).also {

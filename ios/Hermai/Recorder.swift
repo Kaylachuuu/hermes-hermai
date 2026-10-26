@@ -29,12 +29,17 @@ final class Recorder: NSObject {
         r.record()
     }
 
-    /// The recording, or nil when it was too short to be speech.
-    func stop() -> Data? {
+    /// The recording, or nil when the button was held too briefly to be speech. It keeps recording for
+    /// half a second after the button is let go, so the last word isn't cut off.
+    func stop() async -> Data? {
         guard let r = recorder else { return nil }
-        r.stop()
         recorder = nil
-        if Date().timeIntervalSince(started) < 0.3 { return nil }
+        if Date().timeIntervalSince(started) < 0.3 {
+            r.stop()
+            return nil
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        r.stop()
         return try? Data(contentsOf: file)
     }
 

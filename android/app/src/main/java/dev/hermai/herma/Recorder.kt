@@ -16,6 +16,10 @@ class Recorder {
 
     val recording: Boolean get() = record != null
 
+    /** Whether the button has been held long enough to be speech. */
+    val heldLongEnough: Boolean get() = System.currentTimeMillis() - started >= MIN_MS
+    private var started = 0L
+
     @SuppressLint("MissingPermission") // asked for before the first recording
     fun start() {
         if (record != null) return
@@ -24,6 +28,7 @@ class Recorder {
         val r = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT, maxOf(min, RATE))
         record = r
+        started = System.currentTimeMillis()
         r.startRecording()
         thread = Thread {
             val buf = ByteArray(4096)
@@ -60,5 +65,7 @@ class Recorder {
     companion object {
         const val RATE = 16_000
         const val MIN_MS = 300
+        /** How long it keeps recording after the button is let go, so the last word isn't cut off. */
+        const val TAIL_MS = 500L
     }
 }

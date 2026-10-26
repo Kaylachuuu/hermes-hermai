@@ -222,9 +222,12 @@ class MainActivity : Activity(), WakeListener.Events {
 
     private fun release() {
         if (state != State.LISTENING || !recorder.recording) return
-        val wav = recorder.stop()
-        if (wav == null) { show(State.READY); return }
-        send(wav, woke = false)
+        if (!recorder.heldLongEnough) { recorder.stop(); show(State.READY); return }
+        show(State.THINKING)
+        main.postDelayed({
+            val wav = recorder.stop()
+            if (wav == null) show(State.READY) else send(wav, woke = false)
+        }, Recorder.TAIL_MS)
     }
 
     private fun send(wav: ByteArray, woke: Boolean) {
@@ -235,7 +238,8 @@ class MainActivity : Activity(), WakeListener.Events {
                 if (r.ignored) { main.post { show(State.READY) }; return@execute }
                 val audio = r.audio?.let { hermes.audio(it) }
                 main.post {
-                    heardView.text = if (r.heard.isEmpty()) "" else "“${r.heard}”"
+                    val words = shown(r.heard, herma.showTone)
+                    heardView.text = if (words.isEmpty()) "" else "“$words”"
                     replyView.text = r.reply
                     if (r.heard.isEmpty()) status("I didn't catch that.")
                     r.speechError?.let { status("Couldn't speak the reply: $it") }
@@ -302,3 +306,7 @@ class MainActivity : Activity(), WakeListener.Events {
         super.onDestroy()
     }
 }
+
+/** What was heard, without the "[How it was said: …]" line Athena's own hearing adds for her, unless shown. */
+internal fun shown(heard: String, tone: Boolean): String =
+    if (tone) heard else heard.replace(Regex("""\s*\[How it was said:[^\]]*]\s*$"""), "")
